@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Paste Minimal Changes</title>
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Segoe UI", system-ui, sans-serif;
+      font-size: 14px;
+      color: #323130;
+      padding: 20px 16px;
+      background: #fff;
+    }
+    h1 {
+      font-size: 15px;
+      font-weight: 600;
+      color: #0078d4;
+      margin-bottom: 14px;
+    }
+    ol {
+      padding-left: 18px;
+      color: #605e5c;
+      line-height: 1.9;
+      margin-bottom: 18px;
+    }
+    button {
+      width: 100%;
+      padding: 8px 0;
+      background: #0078d4;
+      color: #fff;
+      border: none;
+      border-radius: 2px;
+      font-size: 14px;
+      font-family: inherit;
+      cursor: pointer;
+    }
+    button:hover:not(:disabled) { background: #106ebe; }
+    button:disabled { background: #c8c6c4; cursor: not-allowed; }
+    #status {
+      margin-top: 12px;
+      font-size: 12px;
+      min-height: 18px;
+      line-height: 1.4;
+    }
+    .error { color: #a4262c; }
+    .ok    { color: #107c10; }
+    .info  { color: #605e5c; }
+  </style>
+</head>
+<body>
+  <h1>Paste Minimal Changes</h1>
+  <ol>
+    <li>Select the text to replace in Word.</li>
+    <li>Copy the new version to your clipboard.</li>
+    <li>Click <strong>Apply</strong> — only changed words are tracked.</li>
+  </ol>
+  <button id="btn">Apply Minimal Paste</button>
+  <div id="status" class="info"></div>
+
+  <script>
+    Office.onReady(function () {
+      document.getElementById('btn').addEventListener('click', apply);
+    });
+
+    async function apply() {
+      const btn = document.getElementById('btn');
+      btn.disabled = true;
+      setStatus('info', 'Working…');
+
+      try {
+        let clipText;
+        try {
+          clipText = await navigator.clipboard.readText();
+        } catch {
+          throw new Error('Clipboard read failed — click inside the task pane first, then try again.');
+        }
+        if (!clipText.trim()) throw new Error('Clipboard is empty.');
+
+        await Word.run(async ctx => {
+          const range = ctx.document.getSelection();
+          range.load('text');
+          const ooxmlResult = range.getOoxml();
+          await ctx.sync();
+
+          const selText = range.text;
+          if (!selText) throw new Error('No text selected in Word.');
+
+          const author = (Office.context.userProfile && Office.context.userProfile.displayName) || 'Unknown';
+          const date   = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+          const rPr    = extractRPr(ooxmlResult.value);
+          const docTag = extractDocumentOpenTag(ooxmlResult.value);
+          const diff   = computeDiff(selText, clipText);
+          const ooxml  = buildOoxml(diff, rPr, docTag, author, date);
+
+          range.insertOoxml(ooxml, Word.InsertLocation.replace);
+          await ctx.sync();
+        });
+
+        setStatus('ok', 'Done.');
+      } catch (e) {
+        setStatus('error', e.message || String(e));
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    function setStatus(cls, msg) {
+      const el = document.getElementById('status');
+      el.className = cls;
+      el.textContent = msg;
+    }
+
+    // ── Tokenizer ─────────────────────────────────────────────────────────────
+    // Word sequences | punctuation sequences | whitespace sequences
+    function tokenize(text) {
+      return text.match(/\w+|[^\w\s]+|\s+/g) || [];
+    }
+
+    // ── Prefix/suffix diff ────────────────────────────────────────────────────
+    function computeDiff(oldText, newText) {
+      const a = tokenize(oldText);
+      const b = tokenize(newText);
+      let lo = 0, hi_a = a.length, hi_b = b.length;
+
+      while (lo < hi_a && lo < hi_b && a[lo] === b[lo]) lo++;
+      while (hi_a > lo && hi_b > lo && a[hi_a - 1] === b[hi_b - 1]) { hi_a--; hi_b--; }
+
+      return {
+        prefix:   a.slice(0, lo).join(''),
+        deleted:  a.slice(lo, hi_a).join(''),
+        inserted: b.slice(lo, hi_b).join(''),
+        suffix:   a.slice(hi_a).join('')
+      };
+    }
+
+    // ── OOXML helpers ─────────────────────────────────────────────────────────
+    function extractRPr(ooxml) {
+      const m = ooxml.match(/<w:rPr(?:\s[^>]*)?\/>|<w:rPr(?:[^>]*)?>[\s\S]*?<\/w:rPr>/);
+      return m ? m[0] : '';
+    }
+
+    // Reuse the source document's namespace declarations to cover any w14:/w15:/etc. in rPr.
+    function extractDocumentOpenTag(ooxml) {
+      const m = ooxml.match(/<w:document\b[^>]*>/);
+      return m ? m[0] : '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">';
+    }
+
+    function esc(s) {
+      return s
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function buildOoxml(diff, rPr, docTag, author, date) {
+      let id = 1;
+      let runs = '';
+
+      if (diff.prefix)
+        runs += `<w:r>${rPr}<w:t xml:space="preserve">${esc(diff.prefix)}</w:t></w:r>`;
+      if (diff.deleted)
+        runs += `<w:del w:id="${id++}" w:author="${esc(author)}" w:date="${date}">`
+              + `<w:r>${rPr}<w:delText xml:space="preserve">${esc(diff.deleted)}</w:delText></w:r>`
+              + `</w:del>`;
+      if (diff.inserted)
+        runs += `<w:ins w:id="${id++}" w:author="${esc(author)}" w:date="${date}">`
+              + `<w:r>${rPr}<w:t xml:space="preserve">${esc(diff.inserted)}</w:t></w:r>`
+              + `</w:ins>`;
+      if (diff.suffix)
+        runs += `<w:r>${rPr}<w:t xml:space="preserve">${esc(diff.suffix)}</w:t></w:r>`;
+
+      return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`
+           + `<pkg:package xmlns:pkg="http://schemas.microsoft.com/office/2006/xmlPackage">`
+           + `<pkg:part pkg:name="/_rels/.rels"`
+           +   ` pkg:contentType="application/vnd.openxmlformats-package.relationships+xml"`
+           +   ` pkg:padding="512">`
+           + `<pkg:xmlData>`
+           + `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">`
+           + `<Relationship Id="rId1"`
+           +   ` Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument"`
+           +   ` Target="word/document.xml"/>`
+           + `</Relationships>`
+           + `</pkg:xmlData></pkg:part>`
+           + `<pkg:part pkg:name="/word/document.xml"`
+           +   ` pkg:contentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml">`
+           + `<pkg:xmlData>`
+           + `${docTag}<w:body><w:p>${runs}</w:p></w:body></w:document>`
+           + `</pkg:xmlData></pkg:part></pkg:package>`;
+    }
+  </script>
+</body>
+</html>
