@@ -92,8 +92,8 @@
           const date   = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
           const rPr    = extractRPr(ooxmlResult.value);
           const docTag = extractDocumentOpenTag(ooxmlResult.value);
-          const diff   = computeDiff(selText, clipText);
-          const ooxml  = buildOoxml(diff, rPr, docTag, author, date);
+          const edits  = myersDiff(tokenize(selText), tokenize(clipText));
+          const ooxml  = buildOoxml(edits, rPr, docTag, author, date);
 
           range.insertOoxml(ooxml, Word.InsertLocation.replace);
           await ctx.sync();
@@ -119,21 +119,49 @@
       return text.match(/\w+|[^\w\s]+|\s+/g) || [];
     }
 
-    // ── Prefix/suffix diff ────────────────────────────────────────────────────
-    function computeDiff(oldText, newText) {
-      const a = tokenize(oldText);
-      const b = tokenize(newText);
-      let lo = 0, hi_a = a.length, hi_b = b.length;
+    // ── Myers diff ────────────────────────────────────────────────────────────
+    // Returns [{type: 'equal'|'delete'|'insert', val: token}, ...]
+    function myersDiff(a, b) {
+      const n = a.length, m = b.length;
+      if (n === 0 && m === 0) return [];
+      if (n === 0) return b.map(val => ({ type: 'insert', val }));
+      if (m === 0) return a.map(val => ({ type: 'delete', val }));
 
-      while (lo < hi_a && lo < hi_b && a[lo] === b[lo]) lo++;
-      while (hi_a > lo && hi_b > lo && a[hi_a - 1] === b[hi_b - 1]) { hi_a--; hi_b--; }
+      const max = n + m, off = max;
+      const v = new Array(2 * max + 1).fill(0);
+      const trace = [];
 
-      return {
-        prefix:   a.slice(0, lo).join(''),
-        deleted:  a.slice(lo, hi_a).join(''),
-        inserted: b.slice(lo, hi_b).join(''),
-        suffix:   a.slice(hi_a).join('')
-      };
+      outer:
+      for (let d = 0; d <= max; d++) {
+        trace.push(v.slice());
+        for (let k = -d; k <= d; k += 2) {
+          let x = (k === -d || (k !== d && v[k - 1 + off] < v[k + 1 + off]))
+            ? v[k + 1 + off]
+            : v[k - 1 + off] + 1;
+          let y = x - k;
+          while (x < n && y < m && a[x] === b[y]) { x++; y++; }
+          v[k + off] = x;
+          if (x >= n && y >= m) break outer;
+        }
+      }
+
+      const edits = [];
+      let x = n, y = m;
+
+      for (let d = trace.length - 1; d > 0; d--) {
+        const prev = trace[d];
+        const k = x - y;
+        const prevK = (k === -d || (k !== d && prev[k - 1 + off] < prev[k + 1 + off]))
+          ? k + 1 : k - 1;
+        const prevX  = prev[prevK + off];
+        const afterX = prevK === k - 1 ? prevX + 1 : prevX;
+        while (x > afterX) { edits.push({ type: 'equal',  val: a[x - 1] }); x--; y--; }
+        if (prevK === k - 1) { edits.push({ type: 'delete', val: a[x - 1] }); x--; }
+        else                 { edits.push({ type: 'insert', val: b[y - 1] }); y--; }
+      }
+      while (x > 0) { edits.push({ type: 'equal', val: a[x - 1] }); x--; y--; }
+
+      return edits.reverse();
     }
 
     // ── OOXML helpers ─────────────────────────────────────────────────────────
@@ -156,22 +184,26 @@
         .replace(/"/g, '&quot;');
     }
 
-    function buildOoxml(diff, rPr, docTag, author, date) {
+    function buildOoxml(edits, rPr, docTag, author, date) {
       let id = 1;
       let runs = '';
+      let i = 0;
 
-      if (diff.prefix)
-        runs += `<w:r>${rPr}<w:t xml:space="preserve">${esc(diff.prefix)}</w:t></w:r>`;
-      if (diff.deleted)
-        runs += `<w:del w:id="${id++}" w:author="${esc(author)}" w:date="${date}">`
-              + `<w:r>${rPr}<w:delText xml:space="preserve">${esc(diff.deleted)}</w:delText></w:r>`
-              + `</w:del>`;
-      if (diff.inserted)
-        runs += `<w:ins w:id="${id++}" w:author="${esc(author)}" w:date="${date}">`
-              + `<w:r>${rPr}<w:t xml:space="preserve">${esc(diff.inserted)}</w:t></w:r>`
-              + `</w:ins>`;
-      if (diff.suffix)
-        runs += `<w:r>${rPr}<w:t xml:space="preserve">${esc(diff.suffix)}</w:t></w:r>`;
+      while (i < edits.length) {
+        const type = edits[i].type;
+        let text = '';
+        while (i < edits.length && edits[i].type === type) { text += edits[i].val; i++; }
+        if (type === 'equal')
+          runs += `<w:r>${rPr}<w:t xml:space="preserve">${esc(text)}</w:t></w:r>`;
+        else if (type === 'delete')
+          runs += `<w:del w:id="${id++}" w:author="${esc(author)}" w:date="${date}">`
+                + `<w:r>${rPr}<w:delText xml:space="preserve">${esc(text)}</w:delText></w:r>`
+                + `</w:del>`;
+        else
+          runs += `<w:ins w:id="${id++}" w:author="${esc(author)}" w:date="${date}">`
+                + `<w:r>${rPr}<w:t xml:space="preserve">${esc(text)}</w:t></w:r>`
+                + `</w:ins>`;
+      }
 
       return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`
            + `<pkg:package xmlns:pkg="http://schemas.microsoft.com/office/2006/xmlPackage">`
