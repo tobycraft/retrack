@@ -90,21 +90,54 @@
         await Word.run(async ctx => {
           const range = ctx.document.getSelection();
           range.load('text');
-          const ooxmlResult = range.getOoxml();
           await ctx.sync();
 
           const selText = range.text;
           if (!selText) throw new Error('No text selected in Word.');
 
-          const author = (Office.context.userProfile && Office.context.userProfile.displayName) || 'Unknown';
-          const date   = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
-          const rPr    = extractRPr(ooxmlResult.value);
-          const docTag = extractDocumentOpenTag(ooxmlResult.value);
-          const edits  = myersDiff(tokenize(selText), tokenize(clipText));
-          const ooxml  = buildOoxml(edits, rPr, docTag, author, date);
+          const edits = myersDiff(tokenize(selText), tokenize(clipText));
 
-          range.insertOoxml(ooxml, Word.InsertLocation.replace);
-          await ctx.sync();
+          // range.getOoxml()/insertOoxml() hang indefinitely on Word for the web
+          // (unimplemented there despite being nominally WordApi 1.1 — see
+          // OfficeDev/office-js-docs#121). Apply the diff as native insertText()/
+          // delete() calls instead: with Track Changes on, Word records these as
+          // <w:ins>/<w:del> itself, and inserted text inherits the surrounding
+          // run's formatting automatically, so no manual rPr handling is needed.
+          // Each edit group is located by searching a shrinking [cursor, end)
+          // scope, so the leftmost match is always the correct next occurrence
+          // even when the same token text repeats later in the selection.
+          const endAnchor = range.getRange(Word.RangeLocation.end);
+          let cursor = range.getRange(Word.RangeLocation.start);
+
+          let i = 0;
+          while (i < edits.length) {
+            const type = edits[i].type;
+            let text = '';
+            while (i < edits.length && edits[i].type === type) { text += edits[i].val; i++; }
+
+            if (type === 'insert') {
+              const inserted = cursor.insertText(text, Word.InsertLocation.replace);
+              await ctx.sync();
+              cursor = inserted.getRange(Word.RangeLocation.end);
+            } else {
+              const scope = cursor.expandTo(endAnchor);
+              const results = scope.search(text, { matchCase: true, matchWholeWord: false });
+              results.load('items');
+              await ctx.sync();
+              if (results.items.length === 0) throw new Error('Could not locate expected text while applying changes.');
+              const match = results.items[0];
+
+              if (type === 'equal') {
+                cursor = match.getRange(Word.RangeLocation.end);
+                await ctx.sync();
+              } else {
+                const afterDelete = match.getRange(Word.RangeLocation.start);
+                match.delete();
+                await ctx.sync();
+                cursor = afterDelete;
+              }
+            }
+          }
         });
 
         pasteTarget.value = '';
@@ -171,66 +204,6 @@
       while (x > 0) { edits.push({ type: 'equal', val: a[x - 1] }); x--; y--; }
 
       return edits.reverse();
-    }
-
-    // ── OOXML helpers ─────────────────────────────────────────────────────────
-    function extractRPr(ooxml) {
-      const m = ooxml.match(/<w:rPr(?:\s[^>]*)?\/>|<w:rPr(?:[^>]*)?>[\s\S]*?<\/w:rPr>/);
-      return m ? m[0] : '';
-    }
-
-    // Reuse the source document's namespace declarations to cover any w14:/w15:/etc. in rPr.
-    function extractDocumentOpenTag(ooxml) {
-      const m = ooxml.match(/<w:document\b[^>]*>/);
-      return m ? m[0] : '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">';
-    }
-
-    function esc(s) {
-      return s
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-    }
-
-    function buildOoxml(edits, rPr, docTag, author, date) {
-      let id = 1;
-      let runs = '';
-      let i = 0;
-
-      while (i < edits.length) {
-        const type = edits[i].type;
-        let text = '';
-        while (i < edits.length && edits[i].type === type) { text += edits[i].val; i++; }
-        if (type === 'equal')
-          runs += `<w:r>${rPr}<w:t xml:space="preserve">${esc(text)}</w:t></w:r>`;
-        else if (type === 'delete')
-          runs += `<w:del w:id="${id++}" w:author="${esc(author)}" w:date="${date}">`
-                + `<w:r>${rPr}<w:delText xml:space="preserve">${esc(text)}</w:delText></w:r>`
-                + `</w:del>`;
-        else
-          runs += `<w:ins w:id="${id++}" w:author="${esc(author)}" w:date="${date}">`
-                + `<w:r>${rPr}<w:t xml:space="preserve">${esc(text)}</w:t></w:r>`
-                + `</w:ins>`;
-      }
-
-      return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`
-           + `<pkg:package xmlns:pkg="http://schemas.microsoft.com/office/2006/xmlPackage">`
-           + `<pkg:part pkg:name="/_rels/.rels"`
-           +   ` pkg:contentType="application/vnd.openxmlformats-package.relationships+xml"`
-           +   ` pkg:padding="512">`
-           + `<pkg:xmlData>`
-           + `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">`
-           + `<Relationship Id="rId1"`
-           +   ` Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument"`
-           +   ` Target="word/document.xml"/>`
-           + `</Relationships>`
-           + `</pkg:xmlData></pkg:part>`
-           + `<pkg:part pkg:name="/word/document.xml"`
-           +   ` pkg:contentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml">`
-           + `<pkg:xmlData>`
-           + `${docTag}<w:body><w:p>${runs}</w:p></w:body></w:document>`
-           + `</pkg:xmlData></pkg:part></pkg:package>`;
     }
   </script>
 </body>
