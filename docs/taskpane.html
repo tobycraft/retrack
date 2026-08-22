@@ -39,6 +39,17 @@
     }
     button:hover:not(:disabled) { background: #106ebe; }
     button:disabled { background: #c8c6c4; cursor: not-allowed; }
+    textarea {
+      width: 100%;
+      min-height: 70px;
+      padding: 6px 8px;
+      margin-bottom: 12px;
+      font-family: inherit;
+      font-size: 13px;
+      border: 1px solid #8a8886;
+      border-radius: 2px;
+      resize: vertical;
+    }
     #status {
       margin-top: 12px;
       font-size: 12px;
@@ -54,9 +65,10 @@
   <h1>Paste Minimal Changes</h1>
   <ol>
     <li>Select the text to replace in Word.</li>
-    <li>Copy the new version to your clipboard.</li>
+    <li>Copy the new version, then paste it into the box below.</li>
     <li>Click <strong>Apply</strong> — only changed words are tracked.</li>
   </ol>
+  <textarea id="pasteTarget" placeholder="Paste new text here (Ctrl/Cmd+V)"></textarea>
   <button id="btn">Apply Minimal Paste</button>
   <div id="status" class="info"></div>
 
@@ -71,13 +83,9 @@
       setStatus('info', 'Working…');
 
       try {
-        let clipText;
-        try {
-          clipText = await navigator.clipboard.readText();
-        } catch {
-          throw new Error('Clipboard read failed — click inside the task pane first, then try again.');
-        }
-        if (!clipText.trim()) throw new Error('Clipboard is empty.');
+        const pasteTarget = document.getElementById('pasteTarget');
+        const clipText = pasteTarget.value;
+        if (!clipText.trim()) throw new Error('Paste the new text into the box above first.');
 
         await Word.run(async ctx => {
           const range = ctx.document.getSelection();
@@ -99,6 +107,7 @@
           await ctx.sync();
         });
 
+        pasteTarget.value = '';
         setStatus('ok', 'Done.');
       } catch (e) {
         setStatus('error', e.message || String(e));
