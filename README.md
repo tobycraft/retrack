@@ -63,9 +63,8 @@ package — there's no zip/build artifact for an add-in-only XML manifest.
 
 **4. Listing assets you'll need to prepare separately** (these live in the
 Partner Center form, not the repo):
-- A 300×300 PNG store icon. `docs/assets/icon-80.png` is too small/low-res
-  to use as-is — upscaling it will read as blurry and can get the
-  submission rejected; have a real 300×300 asset made.
+- A 300×300 PNG store icon — `docs/assets/icon-300.png` (the source artwork
+  is also kept at full resolution as `docs/assets/icon-original.png`).
 - 1–5 PNG screenshots of the add-in in use in Word.
 - A privacy policy URL — use the included `docs/privacy.html`
   (`https://<username>.github.io/track-minimal-changes/privacy.html`), which
