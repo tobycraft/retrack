@@ -161,9 +161,11 @@
     }
 
     // ── Tokenizer ─────────────────────────────────────────────────────────────
-    // Word sequences | punctuation sequences | whitespace sequences
+    // Each non-space run absorbs its trailing whitespace, so no token is ever
+    // pure whitespace — Word's range.search() doesn't reliably match a
+    // whitespace-only query, which made apply() fail on lone-space edit groups.
     function tokenize(text) {
-      return text.match(/\w+|[^\w\s]+|\s+/g) || [];
+      return text.match(/\S+\s*|\s+/g) || [];
     }
 
     // ── Myers diff ────────────────────────────────────────────────────────────
