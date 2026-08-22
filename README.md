@@ -36,6 +36,8 @@ The open question is whether `navigator.clipboard.readText()` works when trigger
 
 **To test it:** sideload the manifest as usual (both entry points ship in the same `manifest.xml`), select text, copy new text to the clipboard, and click **Apply Minimal Paste** in the Home tab ribbon (not the task pane). Because a failed function command has no UI to show an error in, failures are written directly into the document as a red `[MinimalPaste TEST FAILED] ...` paragraph after your selection — that's the signal to watch for. No marker paragraph + correct tracked changes = it worked.
 
+There's also a **right-click context menu entry** (select text → right-click → "Apply Minimal Paste"), added as a third entry point once we confirmed Word's native Paste Options gallery — Keep Source Formatting / Merge Formatting / Keep Text Only / etc. — can't be extended by any add-in technology (it's a closed built-in control; the manifest's `ContextMenu` extension point can only add new, separate menu items, not entries inside an existing gallery). This is the closest available alternative, sitting on the same right-click menu. Runs the identical `applyMinimalPaste` function and has the identical clipboard-read risk as the ribbon button — test it the same way.
+
 ## How it works
 
 Tokenizes both texts into word, punctuation, and whitespace tokens, then finds the longest common prefix and suffix. Only the differing middle region is wrapped in `<w:ins>` / `<w:del>` OOXML tags. The result is injected via `Range.insertOoxml()` using the Office.js API.

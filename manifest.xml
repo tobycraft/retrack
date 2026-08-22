@@ -71,6 +71,32 @@
               </Group>
             </OfficeTab>
           </ExtensionPoint>
+          <!-- Prototype: right-click context menu entry. The Paste Options
+               gallery itself (Keep Source Formatting / Merge / Keep Text
+               Only / etc.) is a closed built-in control — no manifest
+               extension point can add an item into it. This is the closest
+               available alternative: a new entry on the same right-click
+               menu, next to where Paste Options appears. Same
+               applyMinimalPaste function as the ribbon button. -->
+          <ExtensionPoint xsi:type="ContextMenu">
+            <OfficeMenu id="ContextMenuText">
+              <Control xsi:type="Button" id="ApplyMinimalPasteContextMenuButton">
+                <Label resid="ApplyMinimalPasteButton.Label"/>
+                <Supertip>
+                  <Title resid="ApplyMinimalPasteButton.Label"/>
+                  <Description resid="ApplyMinimalPasteButton.Tooltip"/>
+                </Supertip>
+                <Icon>
+                  <bt:Image size="16" resid="Icon.16x16"/>
+                  <bt:Image size="32" resid="Icon.32x32"/>
+                  <bt:Image size="80" resid="Icon.80x80"/>
+                </Icon>
+                <Action xsi:type="ExecuteFunction">
+                  <FunctionName>applyMinimalPaste</FunctionName>
+                </Action>
+              </Control>
+            </OfficeMenu>
+          </ExtensionPoint>
         </DesktopFormFactor>
       </Host>
     </Hosts>
