@@ -88,6 +88,7 @@
         if (!clipText.trim()) throw new Error('Paste the new text into the box above first.');
 
         await Word.run(async ctx => {
+          setStatus('info', 'Working… (reading selection)');
           const range = ctx.document.getSelection();
           range.load('text');
           await ctx.sync();
@@ -96,6 +97,7 @@
           if (!selText) throw new Error('No text selected in Word.');
 
           const edits = myersDiff(tokenize(selText), tokenize(clipText));
+          setStatus('info', `Working… (0/${edits.length} edit tokens)`);
 
           // range.getOoxml()/insertOoxml() hang indefinitely on Word for the web
           // (unimplemented there despite being nominally WordApi 1.1 — see
@@ -115,6 +117,8 @@
             let text = '';
             while (i < edits.length && edits[i].type === type) { text += edits[i].val; i++; }
 
+            setStatus('info', `Working… (${type} "${text.slice(0, 20)}", ${i}/${edits.length})`);
+
             if (type === 'insert') {
               const inserted = cursor.insertText(text, Word.InsertLocation.replace);
               await ctx.sync();
@@ -124,7 +128,7 @@
               const results = scope.search(text, { matchCase: true, matchWholeWord: false });
               results.load('items');
               await ctx.sync();
-              if (results.items.length === 0) throw new Error('Could not locate expected text while applying changes.');
+              if (results.items.length === 0) throw new Error(`Could not locate "${text}" while applying changes.`);
               const match = results.items[0];
 
               if (type === 'equal') {
@@ -138,6 +142,7 @@
               }
             }
           }
+          setStatus('info', 'Working… (finalizing)');
         });
 
         pasteTarget.value = '';
