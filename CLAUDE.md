@@ -24,7 +24,7 @@ No npm.                       └───────────────�
 
 - **Hosting:** GitHub Pages serving the `docs/` folder. Free HTTPS on `*.github.io`.
 - **Manifest:** `manifest.xml` at repo root, sideloaded into Word. Contains GitHub Pages URLs.
-- **Add-in UI:** Single `taskpane.html` — all HTML, CSS, JS, diff logic, and OOXML builder in one file.
+- **Add-in UI:** `taskpane.html` (task pane button) and `commands.html` (ribbon button, prototype — see Design decisions & history) both load the diff logic and OOXML builder from `paste-diff.js`.
 - **Only external dependency:** Microsoft's `office.js` CDN (`appsforoffice.microsoft.com/lib/1/hosted/office.js`), mandatory for all Office Add-ins.
 
 ## Diff approach
@@ -59,7 +59,9 @@ paste-minimal-changes/
 ├── .gitignore
 ├── README.md
 └── docs/                     # Served by GitHub Pages
-    ├── taskpane.html         # Entire add-in: UI + diff engine + OOXML builder
+    ├── taskpane.html         # Task pane UI (button + status)
+    ├── commands.html         # Ribbon button function file (prototype, no task pane)
+    ├── paste-diff.js         # Shared diff engine + OOXML builder
     └── assets/
         └── icon-{16,32,80}.png
 ```
@@ -76,6 +78,7 @@ paste-minimal-changes/
 2. **Office Add-in with npm/Node dev server** — full taskpane add-in with PowerShell HTTPS server. Rejected: user asked why a task pane needs a running server. Fair point.
 3. **VBA macro** — zero infrastructure, lives inside Word. LCS diff engine had persistent "subscript out of range" errors across two rewrites (array bounds in backtrack/merge pipeline). Simplified to prefix/suffix approach which worked but VBA is desktop-only and can't be published.
 4. **GitHub Pages add-in** — final form. Same prefix/suffix diff and OOXML approach as the working VBA version, but as a proper Office Add-in hosted for free on Pages. Cross-platform (desktop + web), distributable via manifest, zero ongoing infrastructure.
+5. **Exploring: ribbon button instead of task pane** — user feedback: the task pane itself (open sidebar, click a button inside it) is the complicated part, not the setup. Researched Office Add-in "Commands" (`ExecuteFunction` ribbon buttons, function-file/UI-less runtime): documented, real limitation is that `navigator.clipboard.readText()` requires a focused document + a user gesture that originates inside that document's DOM (OfficeDev/office-js#1991, #986); a ribbon click is a native Office UI event that never touches the add-in's iframe, so clipboard read may be unreliable or fail outright with no task pane to hold focus — the existing task pane code already has to special-case an occasional clipboard-read failure ("click inside the task pane first"), which is the *best case* for focus. Built `commands.html` as a live-test prototype (ships alongside the task pane in the same manifest) to get a real answer in Word rather than relying on docs/issues alone; failures are written into the document as a marker paragraph since a function command has no UI to show an error in. If clipboard read proves unreliable from the ribbon, the fallback design is to stop reading the clipboard via JS entirely: let the user do a normal `Ctrl+V` paste with Track Changes on (Word handles this natively, no permissions involved), then have the ribbon button find the `<w:del>`/`<w:ins>` pair Word just created and collapse it into a minimal diff using the same OOXML engine — sidesteps the Clipboard API altogether.
 
 ## Distribution options
 

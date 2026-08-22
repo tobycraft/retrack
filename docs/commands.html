@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Paste Minimal Changes — Commands</title>
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  <script src="paste-diff.js"></script>
+  <script>
+    Office.onReady();
+
+    // Prototype for validating whether a ribbon button (no task pane) can
+    // read the clipboard directly. See CLAUDE.md design history. On failure
+    // there's no visible surface to show an error in, so we write the
+    // outcome into the document itself as a marker paragraph — that's how
+    // this prototype reports pass/fail during live testing in Word.
+    async function applyMinimalPaste(event) {
+      let failure = null;
+
+      try {
+        let clipText;
+        try {
+          clipText = await navigator.clipboard.readText();
+        } catch (err) {
+          throw new Error('clipboard-read-failed: ' + ((err && err.name) || '') + ' ' + ((err && err.message) || err));
+        }
+        if (!clipText.trim()) throw new Error('Clipboard is empty.');
+
+        await Word.run(async ctx => {
+          const range = ctx.document.getSelection();
+          range.load('text');
+          const ooxmlResult = range.getOoxml();
+          await ctx.sync();
+
+          const selText = range.text;
+          if (!selText) throw new Error('No text selected in Word.');
+
+          const author = (Office.context.userProfile && Office.context.userProfile.displayName) || 'Unknown';
+          const date   = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+          const rPr    = extractRPr(ooxmlResult.value);
+          const docTag = extractDocumentOpenTag(ooxmlResult.value);
+          const edits  = myersDiff(tokenize(selText), tokenize(clipText));
+          const ooxml  = buildOoxml(edits, rPr, docTag, author, date);
+
+          range.insertOoxml(ooxml, Word.InsertLocation.replace);
+          await ctx.sync();
+        });
+      } catch (e) {
+        failure = e.message || String(e);
+      }
+
+      if (failure) {
+        try {
+          await Word.run(async ctx => {
+            const range = ctx.document.getSelection();
+            const para = range.insertParagraph('[MinimalPaste TEST FAILED] ' + failure, Word.InsertLocation.after);
+            para.font.color = '#FF0000';
+            para.font.bold = true;
+            await ctx.sync();
+          });
+        } catch (e2) {
+          // No UI surface left to report through — nothing more we can do.
+        }
+      }
+
+      event.completed();
+    }
+
+    Office.actions.associate('applyMinimalPaste', applyMinimalPaste);
+  </script>
+</head>
+<body></body>
+</html>

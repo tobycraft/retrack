@@ -28,6 +28,14 @@ git push
 
 Only the words that actually changed appear as tracked insertions/deletions. The unchanged prefix and suffix are written back as plain runs.
 
+## Prototype: ribbon button, no task pane
+
+There's a second, experimental entry point being validated alongside the task pane: an **"Apply Minimal Paste" ribbon button** on the Home tab (`docs/commands.html`) that runs the same diff engine without ever opening a task pane — select, copy, click the ribbon button, done.
+
+The open question is whether `navigator.clipboard.readText()` works when triggered by a ribbon click instead of a click inside a visible task pane iframe — Office Add-in function commands run UI-less, and the Clipboard API normally requires a focused document and a user gesture that originates inside that document. See [CLAUDE.md](CLAUDE.md) for the research behind this.
+
+**To test it:** sideload the manifest as usual (both entry points ship in the same `manifest.xml`), select text, copy new text to the clipboard, and click **Apply Minimal Paste** in the Home tab ribbon (not the task pane). Because a failed function command has no UI to show an error in, failures are written directly into the document as a red `[MinimalPaste TEST FAILED] ...` paragraph after your selection — that's the signal to watch for. No marker paragraph + correct tracked changes = it worked.
+
 ## How it works
 
 Tokenizes both texts into word, punctuation, and whitespace tokens, then finds the longest common prefix and suffix. Only the differing middle region is wrapped in `<w:ins>` / `<w:del>` OOXML tags. The result is injected via `Range.insertOoxml()` using the Office.js API.
