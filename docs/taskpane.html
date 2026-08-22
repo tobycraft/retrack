@@ -93,7 +93,11 @@
           range.load('text');
           await ctx.sync();
 
-          const selText = range.text;
+          // range.text sometimes carries an invisible trailing paragraph-mark
+          // character not present in clipText, which otherwise makes an
+          // identical-looking tail token (e.g. "dog.") diff as a spurious
+          // delete+insert instead of matching as equal.
+          const selText = range.text.replace(/\s+$/, '');
           if (!selText) throw new Error('No text selected in Word.');
 
           const edits = myersDiff(tokenize(selText), tokenize(clipText));
