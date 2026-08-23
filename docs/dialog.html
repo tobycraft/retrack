@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Minimize My Changes — Error</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Segoe UI", system-ui, sans-serif;
+      font-size: 14px;
+      color: #a4262c;
+      padding: 20px 16px;
+      background: #fff;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <!-- No office.js here on purpose: this page only ever displays the error
+       message minimizeChanges() (commands.html) put in its own URL, it
+       never needs to talk back to Word. -->
+  <div id="msg"></div>
+  <script>
+    document.getElementById('msg').textContent =
+      new URLSearchParams(location.search).get('msg') || 'An unknown error occurred.';
+  </script>
+</body>
+</html>

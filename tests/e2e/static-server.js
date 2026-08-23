@@ -16,7 +16,7 @@ const MIME = {
 
 const server = http.createServer((req, res) => {
   const urlPath = decodeURIComponent(req.url.split('?')[0]);
-  const relative = urlPath === '/' ? '/taskpane.html' : urlPath;
+  const relative = urlPath === '/' ? '/commands.html' : urlPath;
   const filePath = path.join(root, relative);
 
   if (!filePath.startsWith(root)) {

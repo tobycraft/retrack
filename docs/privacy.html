@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Privacy Policy — Paste Minimal Changes</title>
+<title>Privacy Policy — Minimize My Changes</title>
 <style>
   body { font-family: -apple-system, Segoe UI, Arial, sans-serif; max-width: 40em; margin: 2em auto; padding: 0 1em; line-height: 1.5; color: #222; }
   h1 { font-size: 1.4em; }
@@ -11,25 +11,32 @@
 </style>
 </head>
 <body>
-<h1>Privacy Policy — Paste Minimal Changes</h1>
-<p>Last updated: 2026-08-22</p>
+<h1>Privacy Policy — Minimize My Changes</h1>
+<p>Last updated: 2026-08-23</p>
 
-<p>Paste Minimal Changes is a Word Add-in that computes a word-level diff between
-your current selection and your clipboard, then writes the result back into
-the document using Word's tracked-changes markup.</p>
+<p>Minimize My Changes is a Word Add-in that scans a document's existing
+tracked changes, computes a word-level diff between each delete+insert pair's
+before/after text, and rewrites the result back into the document using
+Word's tracked-changes markup.</p>
 
 <h2>Data collection</h2>
-<p>This add-in does not collect, store, or transmit any data. It has no
-backend server, no analytics, and no telemetry.</p>
+<p>This add-in does not collect, store, or transmit any data to us or to any
+third party. It has no backend server, no analytics, and no telemetry.</p>
 
 <h2>How your content is used</h2>
-<p>The add-in reads the text of your current selection and your clipboard
-contents using the Office.js APIs (<code>getSelection()</code>,
-<code>getOoxml()</code>) strictly to compute the diff and to write the
-result back into the same document via <code>insertOoxml()</code>. All of
-this processing happens locally in the task pane, inside your instance of
-Word. Nothing is sent anywhere, logged, cached, or retained after you close
-the task pane or the document.</p>
+<p>The add-in reads tracked-changes text from the document using the
+Office.js API (<code>getTrackedChanges()</code>) strictly to compute the diff,
+and writes the result back into the same document via native
+<code>insertText()</code>/<code>delete()</code> calls. It also briefly inserts
+and immediately removes one throwaway character at the start of the document
+to read the author name Word's tracked changes stamp automatically — this
+never leaves any trace in the document and nothing is saved or transmitted.
+There is no task pane and no field to type into; the add-in runs entirely
+from a ribbon button click. All processing happens locally, inside your
+instance of Word. Nothing is logged, cached remotely, or retained after the
+add-in finishes running. If something goes wrong, a small popup describing
+the error appears; it displays only text already generated locally and never
+loads any external resource.</p>
 
 <h2>Third parties</h2>
 <p>The only external resource this add-in loads is Microsoft's own
@@ -37,9 +44,10 @@ the task pane or the document.</p>
 Add-ins. No other third-party service, script, or tracker is used.</p>
 
 <h2>Hosting</h2>
-<p>The add-in's static files (this page, the task pane, and its icons) are
-served over HTTPS by GitHub Pages. GitHub's standard web server logs (e.g.
-IP address, requested file) may apply to those page loads per
+<p>The add-in's static files (this page, the hidden page that runs when the
+ribbon button is clicked, the error-popup page, and its icons) are served
+over HTTPS by GitHub Pages. GitHub's standard web server logs (e.g. IP
+address, requested file) may apply to those page loads per
 <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">GitHub's own privacy statement</a>;
 this add-in does not add any collection of its own on top of that.</p>
 
