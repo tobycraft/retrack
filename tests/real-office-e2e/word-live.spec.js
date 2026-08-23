@@ -13,13 +13,24 @@
 //
 // Run with: npm run test:live
 //
-// What it does: sideloads manifest.xml (pointing at the live, deployed
-// docs/commands.html on GitHub Pages — verified byte-identical to the local
-// file), creates a blank Word document, types a plain sentence, makes a
-// real tracked retype (Track Changes on, "brown fox" -> "red fox" — the
-// classic whole-selection replace this add-in exists to clean up), clicks
-// the real ReTrack ribbon button, saves the result, then asserts on the
-// saved .docx's word/document.xml.
+// By default this sideloads manifest.local.xml, which points at
+// tests/real-office-e2e/local-https-server.js (https://localhost:3000)
+// instead of the deployed GitHub Pages site — no git push + Pages rebuild
+// needed to test a docs/commands.html change. Set LIVE_TARGET=prod to
+// instead sideload the real manifest.xml against the deployed site.
+//
+// Word's add-in runtime has been observed to cache a sideloaded add-in's
+// content across launches even when the served file changes, so this
+// bumps manifest.local.xml's <Version> (persisting the bump back to the
+// file) before every run, and always writes a single, fixed-named
+// manifest.xml into the wef sideload folder (never both variants at once)
+// so there's exactly one "ReTrack" ribbon button to find, never two.
+//
+// What it does: creates a blank Word document, types a plain sentence,
+// makes a real tracked retype (Track Changes on, "brown fox" -> "red fox"
+// — the classic whole-selection replace this add-in exists to clean up),
+// clicks the real ReTrack ribbon button, saves the result, then asserts on
+// the saved .docx's word/document.xml.
 //
 // No fixture .docx is checked in and no reviewer name is ever hardcoded:
 // the tracked edit is made live by this same Word session, so whatever
@@ -35,7 +46,8 @@ const os = require('os');
 const path = require('path');
 
 const REPO_ROOT = path.join(__dirname, '..', '..');
-const MANIFEST_SRC = path.join(REPO_ROOT, 'manifest.xml');
+const LIVE_TARGET = process.env.LIVE_TARGET === 'prod' ? 'prod' : 'local';
+const MANIFEST_SRC = path.join(REPO_ROOT, LIVE_TARGET === 'prod' ? 'manifest.xml' : 'manifest.local.xml');
 const WEF_DIR = path.join(os.homedir(), 'Library', 'Containers', 'com.microsoft.Word', 'Data', 'Documents', 'wef');
 const OUTPUT_DIR = '/Users/tobiasruby/Library/CloudStorage/OneDrive-Personal/Sonstiges/retrack - testing';
 const SCRIPT = path.join(__dirname, 'live-word.applescript');
@@ -44,13 +56,23 @@ const BASELINE = 'The quick brown fox jumps.';
 const OLD_SPAN = 'brown fox'; // span that gets found (Cmd+F) and retyped
 const NEW_TEXT = 'red fox';
 
+// Bumps the last segment of <Version>1.2.3.4</Version> and persists it back
+// to the manifest source file, so every test run sideloads a version Word
+// hasn't seen before (see the top-of-file note on WebView caching).
+function bumpVersion(manifestPath) {
+  const xml = fs.readFileSync(manifestPath, 'utf-8');
+  const bumped = xml.replace(/<Version>(\d+)\.(\d+)\.(\d+)\.(\d+)<\/Version>/, (_, a, b, c, d) => {
+    return `<Version>${a}.${b}.${c}.${Number(d) + 1}</Version>`;
+  });
+  fs.writeFileSync(manifestPath, bumped);
+  return bumped;
+}
+
 function ensureSideloaded() {
   fs.mkdirSync(WEF_DIR, { recursive: true });
   const dest = path.join(WEF_DIR, 'manifest.xml');
-  const src = fs.readFileSync(MANIFEST_SRC, 'utf-8');
-  if (!fs.existsSync(dest) || fs.readFileSync(dest, 'utf-8') !== src) {
-    fs.writeFileSync(dest, src);
-  }
+  const src = LIVE_TARGET === 'prod' ? fs.readFileSync(MANIFEST_SRC, 'utf-8') : bumpVersion(MANIFEST_SRC);
+  fs.writeFileSync(dest, src);
 }
 
 function runHandler(handler, ...args) {
