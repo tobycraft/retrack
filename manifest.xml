@@ -7,14 +7,14 @@
 
   <Id>a7f0d2e3-8b1c-4e5f-9a0b-c3d4e5f6a7b8</Id>
   <Version>1.0.0.0</Version>
-  <ProviderName>Minimize My Changes</ProviderName>
+  <ProviderName>ReTrack</ProviderName>
   <DefaultLocale>en-US</DefaultLocale>
-  <DisplayName DefaultValue="Minimize My Changes"/>
+  <DisplayName DefaultValue="ReTrack"/>
   <Description DefaultValue="Rewrite whole-selection tracked changes as word-level tracked changes instead of delete-all/insert-all"/>
 
-  <IconUrl DefaultValue="https://tobycraft.github.io/track-minimal-changes/assets/icon-32.png"/>
-  <HighResolutionIconUrl DefaultValue="https://tobycraft.github.io/track-minimal-changes/assets/icon-80.png"/>
-  <SupportUrl DefaultValue="https://github.com/tobycraft/track-minimal-changes/issues"/>
+  <IconUrl DefaultValue="https://tobycraft.github.io/retrack/assets/icon-32.png"/>
+  <HighResolutionIconUrl DefaultValue="https://tobycraft.github.io/retrack/assets/icon-80.png"/>
+  <SupportUrl DefaultValue="https://github.com/tobycraft/retrack/issues"/>
 
   <AppDomains>
     <AppDomain>https://tobycraft.github.io</AppDomain>
@@ -25,7 +25,7 @@
   </Hosts>
 
   <DefaultSettings>
-    <SourceLocation DefaultValue="https://tobycraft.github.io/track-minimal-changes/commands.html"/>
+    <SourceLocation DefaultValue="https://tobycraft.github.io/retrack/commands.html"/>
   </DefaultSettings>
 
   <Permissions>ReadWriteDocument</Permissions>
@@ -67,16 +67,16 @@
     </Hosts>
     <Resources>
       <bt:Images>
-        <bt:Image id="Icon.16x16" DefaultValue="https://tobycraft.github.io/track-minimal-changes/assets/icon-16.png"/>
-        <bt:Image id="Icon.32x32" DefaultValue="https://tobycraft.github.io/track-minimal-changes/assets/icon-32.png"/>
-        <bt:Image id="Icon.80x80" DefaultValue="https://tobycraft.github.io/track-minimal-changes/assets/icon-80.png"/>
+        <bt:Image id="Icon.16x16" DefaultValue="https://tobycraft.github.io/retrack/assets/icon-16.png"/>
+        <bt:Image id="Icon.32x32" DefaultValue="https://tobycraft.github.io/retrack/assets/icon-32.png"/>
+        <bt:Image id="Icon.80x80" DefaultValue="https://tobycraft.github.io/retrack/assets/icon-80.png"/>
       </bt:Images>
       <bt:Urls>
-        <bt:Url id="Commands.Url" DefaultValue="https://tobycraft.github.io/track-minimal-changes/commands.html"/>
+        <bt:Url id="Commands.Url" DefaultValue="https://tobycraft.github.io/retrack/commands.html"/>
       </bt:Urls>
       <bt:ShortStrings>
         <bt:String id="MinimizeChanges.Group.Label" DefaultValue="Track Changes"/>
-        <bt:String id="MinimizeChanges.Button.Label" DefaultValue="Minimize My Changes"/>
+        <bt:String id="MinimizeChanges.Button.Label" DefaultValue="ReTrack"/>
       </bt:ShortStrings>
       <bt:LongStrings>
         <bt:String id="MinimizeChanges.Button.Tooltip" DefaultValue="Rewrite whole-selection tracked changes as word-level tracked changes, keeping only your own edits authored by your Word user name."/>

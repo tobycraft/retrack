@@ -1,4 +1,4 @@
-# Minimize My Changes — Word Add-in
+# ReTrack — Word Add-in
 
 ## Problem
 
@@ -62,7 +62,7 @@ GitHub Pages config: Settings → Pages → Source: main branch, `/docs` folder.
 ## File structure
 
 ```
-track-minimal-changes/
+retrack/
 ├── manifest.xml              # Office Add-in manifest (sideload this)
 ├── setup.ps1 / setup.sh      # One-time: replace YOUR_GITHUB_USERNAME in manifest
 ├── .gitignore
