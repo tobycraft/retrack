@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 const { loadCommandsPage, runMinimizeChanges, serializeParagraphs } = require('./fixtures');
 
-test.describe('Minimize My Changes — ribbon command (commands.html)', () => {
+test.describe('ReTrack — ribbon command (commands.html)', () => {
   test('minimizes a single delete+insert pair to a word-level diff', async ({ page }) => {
     await loadCommandsPage(page, {
       paragraphs: [

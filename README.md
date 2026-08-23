@@ -1,4 +1,4 @@
-# Minimize My Changes
+# ReTrack
 
 A Word Add-in that rewrites clunky whole-selection tracked changes into word-level tracked changes, so a one-word edit shows up as a one-word edit instead of "delete the whole sentence, insert the whole sentence."
 
@@ -18,12 +18,12 @@ git push
 
 **3. Enable GitHub Pages:** Settings → Pages → Source: `main` branch, `/docs` folder.
 
-**4. Sideload the add-in in Word:** Insert → Get Add-ins → Upload My Add-in → select `manifest.xml`. A **Minimize My Changes** button appears on the Home ribbon tab — there's no task pane to open.
+**4. Sideload the add-in in Word:** Insert → Get Add-ins → Upload My Add-in → select `manifest.xml`. A **ReTrack** button appears on the Home ribbon tab — there's no task pane to open.
 
 ## Usage
 
 1. Edit the document normally in Word with Track Changes on — Word will often record a whole retyped sentence as one big delete+insert.
-2. Click **Minimize My Changes** on the ribbon.
+2. Click **ReTrack** on the ribbon.
 
 That's it — no selection to make, no text to paste, no name to type. Only the words that actually changed stay marked as tracked insertions/deletions; everything else reverts to plain, unmarked text. Nothing appears on success (the tracked changes update in place); if something goes wrong, a small popup explains what.
 
@@ -54,10 +54,10 @@ fields, HTTPS URLs) against `manifest.xml`.
 **2. Confirm the hosted site is live** (Settings → Pages must be enabled,
 `main` branch, `/docs` folder — see Setup above). Check that these all load
 over HTTPS with no errors:
-- `https://<username>.github.io/track-minimal-changes/commands.html`
-- `https://<username>.github.io/track-minimal-changes/dialog.html`
-- `https://<username>.github.io/track-minimal-changes/assets/icon-{16,32,80}.png`
-- `https://<username>.github.io/track-minimal-changes/privacy.html`
+- `https://<username>.github.io/retrack/commands.html`
+- `https://<username>.github.io/retrack/dialog.html`
+- `https://<username>.github.io/retrack/assets/icon-{16,32,80}.png`
+- `https://<username>.github.io/retrack/privacy.html`
 
 **3. Submit via [Partner Center](https://partner.microsoft.com/dashboard):**
 create a new Office Add-in offer and upload `manifest.xml` directly as the
@@ -69,7 +69,7 @@ Partner Center form, not the repo):
   is also kept at full resolution as `docs/assets/icon-original.png`).
 - 1–5 PNG screenshots of the add-in in use in Word.
 - A privacy policy URL — use the included `docs/privacy.html`
-  (`https://<username>.github.io/track-minimal-changes/privacy.html`), which
+  (`https://<username>.github.io/retrack/privacy.html`), which
   accurately states the add-in collects no data.
 - A support URL — `manifest.xml` already points `SupportUrl` at this repo's
   GitHub Issues page.

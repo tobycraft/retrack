@@ -25,7 +25,7 @@
 //      fixture doc's Word user name already set to the fixture's reviewer
 //      name (File > Options > General > User name) — there's no field to
 //      type it into anymore
-//   3. Open the fixture doc, click Minimize My Changes on the ribbon
+//   3. Open the fixture doc, click ReTrack on the ribbon
 //   4. Re-open/read the saved document.xml and assert the real <w:ins>/
 //      <w:del> runs match the same core scenarios covered in
 //      tests/e2e/commands.spec.js (single pair minimized, multiple pairs
