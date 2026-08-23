@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Paste Minimal Changes</title>
+  <title>Minimize My Changes</title>
   <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -26,6 +26,21 @@
       line-height: 1.9;
       margin-bottom: 18px;
     }
+    label {
+      display: block;
+      font-size: 12px;
+      color: #605e5c;
+      margin-bottom: 4px;
+    }
+    input[type="text"] {
+      width: 100%;
+      padding: 6px 8px;
+      margin-bottom: 12px;
+      font-family: inherit;
+      font-size: 13px;
+      border: 1px solid #8a8886;
+      border-radius: 2px;
+    }
     button {
       width: 100%;
       padding: 8px 0;
@@ -39,17 +54,6 @@
     }
     button:hover:not(:disabled) { background: #106ebe; }
     button:disabled { background: #c8c6c4; cursor: not-allowed; }
-    textarea {
-      width: 100%;
-      min-height: 70px;
-      padding: 6px 8px;
-      margin-bottom: 12px;
-      font-family: inherit;
-      font-size: 13px;
-      border: 1px solid #8a8886;
-      border-radius: 2px;
-      resize: vertical;
-    }
     #status {
       margin-top: 12px;
       font-size: 12px;
@@ -62,94 +66,55 @@
   </style>
 </head>
 <body>
-  <h1>Paste Minimal Changes</h1>
+  <h1>Minimize My Changes</h1>
   <ol>
-    <li>Select the text to replace in Word.</li>
-    <li>Copy the new version, then paste it into the box below.</li>
-    <li>Click <strong>Apply</strong> — only changed words are tracked.</li>
+    <li>Edit the document normally with Track Changes on — Word will often record a whole sentence as one delete+insert.</li>
+    <li>Enter your name exactly as it appears in Word's tracked changes (File → Options → General → User name).</li>
+    <li>Click <strong>Minimize My Changes</strong> — only the words that actually changed stay marked; everything else reverts to plain, unmarked text.</li>
   </ol>
-  <textarea id="pasteTarget" placeholder="Paste new text here (Ctrl/Cmd+V)"></textarea>
-  <button id="btn">Apply Minimal Paste</button>
+  <label for="authorName">Your name (as shown in tracked changes)</label>
+  <input type="text" id="authorName" placeholder="e.g. Jane Reviewer"/>
+  <button id="btn">Minimize My Changes</button>
   <div id="status" class="info"></div>
 
   <script>
+    const AUTHOR_NAME_KEY = 'pmc_authorName';
+
     Office.onReady(function () {
-      document.getElementById('btn').addEventListener('click', apply);
+      const authorInput = document.getElementById('authorName');
+      authorInput.value = localStorage.getItem(AUTHOR_NAME_KEY) || '';
+      authorInput.addEventListener('input', function () {
+        localStorage.setItem(AUTHOR_NAME_KEY, authorInput.value);
+      });
+      document.getElementById('btn').addEventListener('click', minimizeChanges);
     });
 
-    async function apply() {
+    async function minimizeChanges() {
       const btn = document.getElementById('btn');
       btn.disabled = true;
       setStatus('info', 'Working…');
 
       try {
-        const pasteTarget = document.getElementById('pasteTarget');
-        const clipText = pasteTarget.value;
-        if (!clipText.trim()) throw new Error('Paste the new text into the box above first.');
+        const authorName = document.getElementById('authorName').value.trim();
+        if (!authorName) throw new Error('Enter your name above first.');
+
+        let groupsRewritten = 0;
 
         await Word.run(async ctx => {
-          const range = ctx.document.getSelection();
-          range.load('text');
+          ctx.document.changeTrackingMode = Word.ChangeTrackingMode.trackAll;
+
+          const paragraphs = ctx.document.body.paragraphs;
+          paragraphs.load('items');
           await ctx.sync();
 
-          // range.text sometimes carries an invisible trailing paragraph-mark
-          // character not present in clipText, which otherwise makes an
-          // identical-looking tail token (e.g. "dog.") diff as a spurious
-          // delete+insert instead of matching as equal.
-          const selText = range.text.replace(/\s+$/, '');
-          if (!selText) throw new Error('No text selected in Word.');
-
-          const edits = myersDiff(tokenize(selText), tokenize(clipText));
-
-          // range.getOoxml()/insertOoxml() hang indefinitely on Word for the web
-          // (unimplemented there despite being nominally WordApi 1.1 — see
-          // OfficeDev/office-js-docs#121). Apply the diff as native insertText()/
-          // delete() calls instead: with Track Changes on, Word records these as
-          // <w:ins>/<w:del> itself, and inserted text inherits the surrounding
-          // run's formatting automatically, so no manual rPr handling is needed.
-          // Each edit group is located by searching a shrinking [cursor, end)
-          // scope, so the leftmost match is always the correct next occurrence
-          // even when the same token text repeats later in the selection.
-          const endAnchor = range.getRange(Word.RangeLocation.end);
-          let cursor = range.getRange(Word.RangeLocation.start);
-
-          let i = 0;
-          while (i < edits.length) {
-            const type = edits[i].type;
-            let text = '';
-            while (i < edits.length && edits[i].type === type) { text += edits[i].val; i++; }
-
-            if (type === 'equal' && i >= edits.length) {
-              // Trailing unchanged text — nothing follows it, so there's no
-              // need to locate it (its range.text sometimes includes an
-              // invisible paragraph-end character that search() won't match).
-            } else if (type === 'insert') {
-              const inserted = cursor.insertText(text, Word.InsertLocation.replace);
-              await ctx.sync();
-              cursor = inserted.getRange(Word.RangeLocation.end);
-            } else {
-              const scope = cursor.expandTo(endAnchor);
-              const results = scope.search(text, { matchCase: true, matchWholeWord: false });
-              results.load('items');
-              await ctx.sync();
-              if (results.items.length === 0) throw new Error(`Could not locate "${text}" while applying changes.`);
-              const match = results.items[0];
-
-              if (type === 'equal') {
-                cursor = match.getRange(Word.RangeLocation.end);
-                await ctx.sync();
-              } else {
-                const afterDelete = match.getRange(Word.RangeLocation.start);
-                match.delete();
-                await ctx.sync();
-                cursor = afterDelete;
-              }
-            }
+          for (const paragraph of paragraphs.items) {
+            groupsRewritten += await minimizeParagraph(ctx, paragraph, authorName);
           }
         });
 
-        pasteTarget.value = '';
-        setStatus('ok', 'Done.');
+        setStatus('ok', groupsRewritten > 0
+          ? `Minimized ${groupsRewritten} change${groupsRewritten === 1 ? '' : 's'}.`
+          : 'No matching changes found to minimize.');
       } catch (e) {
         setStatus('error', e.message || String(e));
       } finally {
@@ -161,6 +126,134 @@
       const el = document.getElementById('status');
       el.className = cls;
       el.textContent = msg;
+    }
+
+    // ── Per-paragraph scan ───────────────────────────────────────────────────
+    // Walks left to right through the paragraph exactly once. cursor only ever
+    // moves forward past a group it has already rewritten, so a freshly
+    // minimized delete+insert pair (which is itself an adjacent Deleted+Added
+    // pair, indistinguishable from an unminimized one to getTrackedChanges())
+    // is never rediscovered and re-diffed — that would otherwise loop forever
+    // on words with no shorter minimization (e.g. delete "brown"/insert "red").
+    async function minimizeParagraph(ctx, paragraph, authorName) {
+      let cursor = paragraph.getRange(Word.RangeLocation.start);
+      const paraEnd = paragraph.getRange(Word.RangeLocation.end);
+      let groupsRewritten = 0;
+
+      while (true) {
+        const scope = cursor.expandTo(paraEnd);
+        const trackedChanges = scope.getTrackedChanges();
+        trackedChanges.load('items');
+        await ctx.sync();
+        if (trackedChanges.items.length === 0) break;
+
+        trackedChanges.items.forEach(tc => tc.load(['type', 'author', 'text']));
+        await ctx.sync();
+
+        const revisions = trackedChanges.items.map(tc => ({ type: tc.type, author: tc.author, text: tc.text, ref: tc }));
+        const group = findAdjacentGroup(revisions, authorName);
+        if (!group) break;
+
+        const allRevs = group.deletedRun.concat(group.addedRun).sort((a, b) => a.order - b.order);
+        const groupRange = allRevs[0].ref.getRange(Word.RangeLocation.start)
+          .expandTo(allRevs[allRevs.length - 1].ref.getRange(Word.RangeLocation.end));
+
+        const deletedText = group.deletedRun.map(r => r.text).join('');
+        const insertedText = group.addedRun.map(r => r.text).join('');
+
+        allRevs.forEach(r => r.ref.reject());
+        await ctx.sync();
+
+        cursor = await applyDiffInRange(ctx, groupRange, deletedText, insertedText);
+        groupsRewritten++;
+      }
+
+      return groupsRewritten;
+    }
+
+    // Finds the first adjacent Deleted-run + Added-run (in either order) where
+    // every revision in both runs is authored by authorName. A lone
+    // Deleted-only or Added-only run (nothing to minimize) or a run authored
+    // by someone else is skipped over, not treated as a match.
+    function findAdjacentGroup(revisions, authorName) {
+      revisions.forEach((r, idx) => { r.order = idx; });
+
+      let i = 0;
+      while (i < revisions.length) {
+        const r = revisions[i];
+        if ((r.type !== 'Deleted' && r.type !== 'Added') || r.author !== authorName) { i++; continue; }
+
+        const runType = r.type;
+        let j = i;
+        const run = [];
+        while (j < revisions.length && revisions[j].type === runType && revisions[j].author === authorName) {
+          run.push(revisions[j]); j++;
+        }
+
+        const otherType = runType === 'Deleted' ? 'Added' : 'Deleted';
+        if (j < revisions.length && revisions[j].type === otherType && revisions[j].author === authorName) {
+          let k = j;
+          const otherRun = [];
+          while (k < revisions.length && revisions[k].type === otherType && revisions[k].author === authorName) {
+            otherRun.push(revisions[k]); k++;
+          }
+          return runType === 'Deleted'
+            ? { deletedRun: run, addedRun: otherRun }
+            : { deletedRun: otherRun, addedRun: run };
+        }
+
+        i = j;
+      }
+      return null;
+    }
+
+    // ── Apply a word-level diff inside baseRange, replacing beforeText with
+    // afterText. Returns a Range anchored at the end of baseRange, which
+    // stays valid past the rewritten content since only insertions/deletions
+    // before it occur. Each edit group is located by searching a shrinking
+    // [cursor, end) scope so the leftmost match is always the correct next
+    // occurrence even when the same token text repeats later in the range.
+    async function applyDiffInRange(ctx, baseRange, beforeText, afterText) {
+      const edits = myersDiff(tokenize(beforeText), tokenize(afterText));
+
+      const endAnchor = baseRange.getRange(Word.RangeLocation.end);
+      let cursor = baseRange.getRange(Word.RangeLocation.start);
+
+      let i = 0;
+      while (i < edits.length) {
+        const type = edits[i].type;
+        let text = '';
+        while (i < edits.length && edits[i].type === type) { text += edits[i].val; i++; }
+
+        if (type === 'equal' && i >= edits.length) {
+          // Trailing unchanged text — nothing follows it, so there's no
+          // need to locate it (its range.text sometimes includes an
+          // invisible paragraph-end character that search() won't match).
+        } else if (type === 'insert') {
+          const inserted = cursor.insertText(text, Word.InsertLocation.replace);
+          await ctx.sync();
+          cursor = inserted.getRange(Word.RangeLocation.end);
+        } else {
+          const scope = cursor.expandTo(endAnchor);
+          const results = scope.search(text, { matchCase: true, matchWholeWord: false });
+          results.load('items');
+          await ctx.sync();
+          if (results.items.length === 0) throw new Error(`Could not locate "${text}" while minimizing changes.`);
+          const match = results.items[0];
+
+          if (type === 'equal') {
+            cursor = match.getRange(Word.RangeLocation.end);
+            await ctx.sync();
+          } else {
+            const afterDelete = match.getRange(Word.RangeLocation.start);
+            match.delete();
+            await ctx.sync();
+            cursor = afterDelete;
+          }
+        }
+      }
+
+      return endAnchor;
     }
 
     // ── Tokenizer ─────────────────────────────────────────────────────────────

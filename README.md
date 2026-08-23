@@ -1,6 +1,6 @@
-# Paste Minimal Changes
+# Minimize My Changes
 
-A Word Add-in that pastes with word-level tracked changes instead of the default delete-all/insert-all behaviour.
+A Word Add-in that rewrites clunky whole-selection tracked changes into word-level tracked changes, so a one-word edit shows up as a one-word edit instead of "delete the whole sentence, insert the whole sentence."
 
 ## Setup
 
@@ -22,15 +22,15 @@ git push
 
 ## Usage
 
-1. Select the paragraph (or text) you want to replace in Word.
-2. Copy the revised version to your clipboard.
-3. Click **Apply Minimal Paste** in the task pane.
+1. Edit the document normally in Word with Track Changes on — Word will often record a whole retyped sentence as one big delete+insert.
+2. Enter your name in the task pane exactly as it appears in Word's tracked changes (File → Options → General → User name).
+3. Click **Minimize My Changes**.
 
-Only the words that actually changed appear as tracked insertions/deletions. The unchanged prefix and suffix are written back as plain runs.
+Only the words that actually changed stay marked as tracked insertions/deletions; everything else reverts to plain, unmarked text. No clipboard involved — the add-in reads the "before" and "after" text straight from the tracked changes already in the document.
 
 ## How it works
 
-Tokenizes both texts into word, punctuation, and whitespace tokens, then finds the longest common prefix and suffix. Only the differing middle region is wrapped in `<w:ins>` / `<w:del>` OOXML tags. The result is injected via `Range.insertOoxml()` using the Office.js API.
+Scans the document paragraph by paragraph for adjacent delete+insert tracked-change pairs authored by the name you entered (via Office.js's `getTrackedChanges()`). For each pair, it rejects both revisions (restoring plain original text), tokenizes the original and replacement text into word/whitespace tokens, runs a Myers diff to find the minimal edit script, and replays it as native `insertText()`/`delete()` calls with Track Changes on — so Word itself records the new word-level `<w:ins>`/`<w:del>` marks.
 
 See [CLAUDE.md](CLAUDE.md) for full architecture and design notes.
 
@@ -81,11 +81,11 @@ surprised if the first submission comes back with feedback — that's normal.
 
 The add-in itself has zero build/npm dependencies. `package.json` and `tests/` are dev-only tooling for an end-to-end test suite — nothing under them is deployed to GitHub Pages.
 
-Real Word can't be automated in CI, so the tests load the actual `docs/taskpane.html` in a real browser via [Playwright](https://playwright.dev), swap the Office.js CDN script for a small mock of the Word JS API (`tests/e2e/mock-office.js`), and stub `navigator.clipboard`. The tokenizer, diff engine, and OOXML builder run unmodified — only the Word/Office host boundary is faked.
+Real Word can't be automated in CI, so the tests load the actual `docs/taskpane.html` in a real browser via [Playwright](https://playwright.dev), and swap the Office.js CDN script for a small mock of the Word JS API (`tests/e2e/mock-office.js`) that simulates a document's paragraphs and tracked changes. The tokenizer, diff engine, and scan/rewrite loop run unmodified — only the Word/Office host boundary is faked.
 
 ```bash
 npm install
 npm run test:e2e
 ```
 
-Covers the core diff scenarios: mid-sentence word replacement, pure insertion, whole-selection replacement, and no-op (identical) paste — asserting on the generated `<w:ins>`/`<w:del>` OOXML, including that `<w:rPr>` formatting is preserved on every run.
+Covers the core scenarios: a single delete+insert pair minimized to a word-level diff, multiple pairs across paragraphs, a pair skipped because it's authored by someone else, and a document with no matching tracked changes at all.

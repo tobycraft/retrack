@@ -1,7 +1,7 @@
 {
   "name": "paste-minimal-changes-tests",
   "private": true,
-  "description": "Dev-only test tooling for the Paste Minimal Changes Word Add-in. Not part of the deployed docs/ site.",
+  "description": "Dev-only test tooling for the Minimize My Changes Word Add-in. Not part of the deployed docs/ site.",
   "scripts": {
     "test:e2e": "playwright test",
     "validate": "office-addin-manifest validate manifest.xml"
