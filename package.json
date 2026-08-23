@@ -9,6 +9,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.48.0",
+    "office-addin-dev-certs": "^2.0.10",
     "office-addin-manifest": "^2.1.6"
   }
 }
