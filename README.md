@@ -91,3 +91,13 @@ npm run test:e2e
 ```
 
 Covers the core scenarios: a single delete+insert pair minimized to a word-level diff, multiple pairs across paragraphs, a pair skipped because it's authored by someone else, a document with no matching tracked changes at all, the author name being correctly auto-detected rather than typed, and an error opening the `dialog.html` popup instead of throwing silently.
+
+### Live-Word test
+
+`tests/real-office-e2e/word-live.spec.js` drives a real, licensed Word for Mac install via AppleScript/System Events UI automation instead of a mock — it creates a document, makes a real tracked retype, clicks the actual ReTrack ribbon button, saves, and asserts on the saved `.docx`'s XML. This does **not** run in CI and is not part of `npm run test:e2e`; it needs a local Word install and one-time macOS permission grants (System Settings → Privacy & Security → Automation, and → Accessibility) for the terminal running it.
+
+```bash
+npm run test:live
+```
+
+By default this sideloads `manifest.local.xml`, which points at a local HTTPS server (`tests/real-office-e2e/local-https-server.js`, auto-started by `playwright.live.config.js`) serving `docs/` straight from disk — so a `docs/commands.html` change is picked up immediately, with no `git push` + Pages rebuild needed. Set `LIVE_TARGET=prod` to instead sideload the real `manifest.xml` against the deployed GitHub Pages site.
