@@ -105,8 +105,15 @@
         const deletedText = group.deletedRun.map(r => r.text).join('');
         const insertedText = group.addedRun.map(r => r.text).join('');
 
-        allRevs.forEach(r => r.ref.reject());
-        await ctx.sync();
+        // Reject each revision with its own sync rather than batching them
+        // before one sync — real Word (unlike the mocked test host) doesn't
+        // reliably apply a reject() on an Added revision when it's batched
+        // together with a reject() on its immediately-adjacent Deleted
+        // sibling; only the Deleted one would take effect.
+        for (const r of allRevs) {
+          r.ref.reject();
+          await ctx.sync();
+        }
 
         cursor = await applyDiffInRange(ctx, groupRange, deletedText, insertedText);
       }
