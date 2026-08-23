@@ -64,14 +64,21 @@ GitHub Pages config: Settings → Pages → Source: main branch, `/docs` folder.
 ```
 retrack/
 ├── manifest.xml              # Office Add-in manifest (sideload this)
+├── manifest.local.xml        # Dev-only variant pointing at the local HTTPS server, for tests/real-office-e2e/
 ├── setup.ps1 / setup.sh      # One-time: replace YOUR_GITHUB_USERNAME in manifest
+├── playwright.config.js      # Mocked e2e suite (tests/e2e/)
+├── playwright.live.config.js # Live-Word suite (tests/real-office-e2e/); auto-starts the local HTTPS server
 ├── .gitignore
 ├── README.md
-└── docs/                     # Served by GitHub Pages
-    ├── commands.html         # Entire add-in: diff engine + tracked-changes scan/rewrite, no visible UI
-    ├── dialog.html            # Error popup only (opened via displayDialogAsync on failure)
-    └── assets/
-        └── icon-{16,32,80}.png
+├── docs/                     # Served by GitHub Pages
+│   ├── commands.html         # Entire add-in: diff engine + tracked-changes scan/rewrite, no visible UI
+│   ├── dialog.html            # Error popup only (opened via displayDialogAsync on failure)
+│   └── assets/
+│       └── icon-{16,32,80}.png
+└── tests/                    # Dev-only, npm install required; nothing here is deployed to Pages
+    ├── e2e/                   # Mocked suite (`npm run test:e2e`) — mock-office.js fakes the Word JS API
+    └── real-office-e2e/       # Live suite (`npm run test:live`) — drives a real Word for Mac install via
+                                # AppleScript; local-https-server.js serves docs/ for fast iteration
 ```
 
 ## Known limitations
