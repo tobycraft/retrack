@@ -41,8 +41,7 @@ const OUTPUT_DIR = '/Users/tobiasruby/Library/CloudStorage/OneDrive-Personal/Son
 const SCRIPT = path.join(__dirname, 'live-word.applescript');
 
 const BASELINE = 'The quick brown fox jumps.';
-const PREFIX = 'The quick '; // unchanged text before the retyped span
-const OLD_SPAN = 'brown fox'; // span that gets selected and retyped
+const OLD_SPAN = 'brown fox'; // span that gets found (Cmd+F) and retyped
 const NEW_TEXT = 'red fox';
 
 function ensureSideloaded() {
@@ -99,7 +98,7 @@ test.describe('ReTrack — live Word (real Office desktop)', () => {
     // silently closed away.
     runHandler('createDocument');
     runHandler('typeBaseline', BASELINE);
-    runHandler('retypeTracked', String(PREFIX.length), String(OLD_SPAN.length), NEW_TEXT);
+    runHandler('retypeTracked', OLD_SPAN, NEW_TEXT);
     runHandler('clickRibbonButton', 'ReTrack');
     runHandler('saveAndClose', outputPath);
 

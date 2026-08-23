@@ -27,7 +27,7 @@ on runHandler(handlerName, args)
 	else if handlerName is "typeBaseline" then
 		return typeBaseline(item 1 of args)
 	else if handlerName is "retypeTracked" then
-		return retypeTracked(item 1 of args, item 2 of args, item 3 of args)
+		return retypeTracked(item 1 of args, item 2 of args)
 	else if handlerName is "clickRibbonButton" then
 		return clickRibbonButton(item 1 of args)
 	else if handlerName is "saveAndClose" then
@@ -75,30 +75,27 @@ on typeBaseline(theText)
 	return "ok"
 end typeBaseline
 
--- oldPrefixLen: characters before the span being retyped (e.g. length of
--- "The quick "). oldSpanLen: characters of the span to select and replace
--- (e.g. length of "brown fox"). newText: replacement text (e.g. "red fox").
-on retypeTracked(oldPrefixLen, oldSpanLen, newText)
-	set oldPrefixLen to oldPrefixLen as integer
-	set oldSpanLen to oldSpanLen as integer
+-- oldSpanText: the exact text to find and replace (e.g. "brown fox").
+-- newText: replacement text (e.g. "red fox"). Uses Word's own Find (Cmd+F)
+-- to select oldSpanText — far more reliable than counting individual
+-- arrow-key presses, which was found to occasionally under-select (or drop
+-- keystrokes entirely) under real System Events timing.
+on retypeTracked(oldSpanText, newText)
 	tell application "System Events"
 		tell process "Microsoft Word"
 			set frontmost to true
 			-- Turn Track Changes on.
 			keystroke "e" using {command down, shift down}
-			delay 0.3
-			-- Jump to the very start of the document.
-			key code 115 using {command down} -- Home
-			delay 0.2
-			-- Advance past the unchanged prefix.
-			repeat oldPrefixLen times
-				key code 124 -- Right Arrow
-			end repeat
-			-- Select the span being replaced.
-			repeat oldSpanLen times
-				key code 124 using {shift down} -- Shift+Right Arrow
-			end repeat
-			delay 0.2
+			delay 0.5
+			-- Open Find, search for the exact span, select it, close Find.
+			keystroke "f" using {command down}
+			delay 0.5
+			keystroke oldSpanText
+			delay 0.5
+			key code 36 -- Return: jump to / select the first match
+			delay 0.5
+			key code 53 -- Escape: close the Find bar, keep the selection
+			delay 0.5
 			-- Retype it — with Track Changes on this produces one real
 			-- Deleted+Added pair authored by the signed-in Word identity.
 			keystroke newText
@@ -111,8 +108,14 @@ on clickRibbonButton(buttonName)
 	tell application "System Events"
 		tell process "Microsoft Word"
 			set frontmost to true
-			set foundButton to my findButtonByName(front window, buttonName)
-			if foundButton is missing value then
+			set foundButton to missing value
+			-- Right after a fresh Word launch, the add-in's commands.html
+			-- (and office.js from the CDN) may still be loading, so the
+			-- ribbon button can take several seconds to appear. Retry
+			-- instead of failing on the first miss.
+			repeat with attempt from 1 to 10
+				set foundButton to my findButtonByName(front window, buttonName)
+				if foundButton is not missing value then exit repeat
 				-- Ribbon may have collapsed the group into an overflow
 				-- chevron; try to open it and search again.
 				try
@@ -121,11 +124,13 @@ on clickRibbonButton(buttonName)
 						click item 1 of overflowButtons
 						delay 0.5
 						set foundButton to my findButtonByName(front window, buttonName)
+						if foundButton is not missing value then exit repeat
 					end if
 				end try
-			end if
+				delay 2
+			end repeat
 			if foundButton is missing value then
-				error "ReTrack button not found in ribbon — check the add-in is sideloaded (manifest.xml in ~/Library/Containers/com.microsoft.Word/Data/Documents/wef/) and trusted in Word."
+				error "ReTrack button not found in ribbon after retrying — check the add-in is sideloaded (manifest.xml in ~/Library/Containers/com.microsoft.Word/Data/Documents/wef/) and trusted in Word."
 			end if
 			click foundButton
 		end tell

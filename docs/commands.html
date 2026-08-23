@@ -105,13 +105,18 @@
         const deletedText = group.deletedRun.map(r => r.text).join('');
         const insertedText = group.addedRun.map(r => r.text).join('');
 
-        // Reject each revision with its own sync rather than batching them
-        // before one sync — real Word (unlike the mocked test host) doesn't
-        // reliably apply a reject() on an Added revision when it's batched
-        // together with a reject() on its immediately-adjacent Deleted
-        // sibling; only the Deleted one would take effect.
-        for (const r of allRevs) {
-          r.ref.reject();
+        // Reject by re-querying groupRange's tracked changes fresh before
+        // each reject(), rather than reusing the TrackedChange references
+        // already held in allRevs — real Word (unlike the mocked test host)
+        // can silently no-op a reject() on a reference whose neighbour was
+        // just resolved, since rejecting one revision can invalidate an
+        // already-fetched reference to its immediately-adjacent sibling.
+        for (let guard = 0; guard < allRevs.length + 2; guard++) {
+          const remaining = groupRange.getTrackedChanges();
+          remaining.load('items');
+          await ctx.sync();
+          if (remaining.items.length === 0) break;
+          remaining.items[0].reject();
           await ctx.sync();
         }
 
