@@ -2,130 +2,75 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Minimize My Changes</title>
+  <title>Minimize My Changes — commands</title>
   <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: "Segoe UI", system-ui, sans-serif;
-      font-size: 14px;
-      color: #323130;
-      padding: 20px 16px;
-      background: #fff;
-    }
-    h1 {
-      font-size: 15px;
-      font-weight: 600;
-      color: #0078d4;
-      margin-bottom: 14px;
-    }
-    ol {
-      padding-left: 18px;
-      color: #605e5c;
-      line-height: 1.9;
-      margin-bottom: 18px;
-    }
-    label {
-      display: block;
-      font-size: 12px;
-      color: #605e5c;
-      margin-bottom: 4px;
-    }
-    input[type="text"] {
-      width: 100%;
-      padding: 6px 8px;
-      margin-bottom: 12px;
-      font-family: inherit;
-      font-size: 13px;
-      border: 1px solid #8a8886;
-      border-radius: 2px;
-    }
-    button {
-      width: 100%;
-      padding: 8px 0;
-      background: #0078d4;
-      color: #fff;
-      border: none;
-      border-radius: 2px;
-      font-size: 14px;
-      font-family: inherit;
-      cursor: pointer;
-    }
-    button:hover:not(:disabled) { background: #106ebe; }
-    button:disabled { background: #c8c6c4; cursor: not-allowed; }
-    #status {
-      margin-top: 12px;
-      font-size: 12px;
-      min-height: 18px;
-      line-height: 1.4;
-    }
-    .error { color: #a4262c; }
-    .ok    { color: #107c10; }
-    .info  { color: #605e5c; }
-  </style>
 </head>
 <body>
-  <h1>Minimize My Changes</h1>
-  <ol>
-    <li>Edit the document normally with Track Changes on — Word will often record a whole sentence as one delete+insert.</li>
-    <li>Enter your name exactly as it appears in Word's tracked changes (File → Options → General → User name).</li>
-    <li>Click <strong>Minimize My Changes</strong> — only the words that actually changed stay marked; everything else reverts to plain, unmarked text.</li>
-  </ol>
-  <label for="authorName">Your name (as shown in tracked changes)</label>
-  <input type="text" id="authorName" placeholder="e.g. Jane Reviewer"/>
-  <button id="btn">Minimize My Changes</button>
-  <div id="status" class="info"></div>
-
   <script>
-    const AUTHOR_NAME_KEY = 'pmc_authorName';
+    // This page has no visible UI. Word loads it in a hidden webview purely
+    // to run minimizeChanges() when the ribbon button (see manifest.xml,
+    // Action xsi:type="ExecuteFunction") is clicked.
 
     Office.onReady(function () {
-      const authorInput = document.getElementById('authorName');
-      authorInput.value = localStorage.getItem(AUTHOR_NAME_KEY) || '';
-      authorInput.addEventListener('input', function () {
-        localStorage.setItem(AUTHOR_NAME_KEY, authorInput.value);
-      });
-      document.getElementById('btn').addEventListener('click', minimizeChanges);
+      Office.actions.associate('minimizeChanges', minimizeChanges);
     });
 
-    async function minimizeChanges() {
-      const btn = document.getElementById('btn');
-      btn.disabled = true;
-      setStatus('info', 'Working…');
-
-      try {
-        const authorName = document.getElementById('authorName').value.trim();
-        if (!authorName) throw new Error('Enter your name above first.');
-
-        let groupsRewritten = 0;
-
-        await Word.run(async ctx => {
-          ctx.document.changeTrackingMode = Word.ChangeTrackingMode.trackAll;
-
-          const paragraphs = ctx.document.body.paragraphs;
-          paragraphs.load('items');
-          await ctx.sync();
-
-          for (const paragraph of paragraphs.items) {
-            groupsRewritten += await minimizeParagraph(ctx, paragraph, authorName);
-          }
-        });
-
-        setStatus('ok', groupsRewritten > 0
-          ? `Minimized ${groupsRewritten} change${groupsRewritten === 1 ? '' : 's'}.`
-          : 'No matching changes found to minimize.');
-      } catch (e) {
-        setStatus('error', e.message || String(e));
-      } finally {
-        btn.disabled = false;
-      }
+    function minimizeChanges(event) {
+      runMinimize()
+        .catch(function (e) { showError(e.message || String(e)); })
+        .then(function () { event.completed(); });
     }
 
-    function setStatus(cls, msg) {
-      const el = document.getElementById('status');
-      el.className = cls;
-      el.textContent = msg;
+    async function runMinimize() {
+      await Word.run(async ctx => {
+        ctx.document.changeTrackingMode = Word.ChangeTrackingMode.trackAll;
+
+        const authorName = await detectAuthorName(ctx);
+
+        const paragraphs = ctx.document.body.paragraphs;
+        paragraphs.load('items');
+        await ctx.sync();
+
+        for (const paragraph of paragraphs.items) {
+          await minimizeParagraph(ctx, paragraph, authorName);
+        }
+      });
+    }
+
+    // Office.js has no API to read the current Word user's display name for
+    // Word (unlike Outlook's Office.context.mailbox.userProfile) short of
+    // full SSO/Azure AD, which is out of scope for a zero-infrastructure
+    // add-in. Instead, make one throwaway tracked edit — Word stamps it with
+    // your real user name the same way it stamps any edit — read that name
+    // back, then reject the edit away so the document is left exactly as it
+    // was found.
+    async function detectAuthorName(ctx) {
+      const probe = ctx.document.body.getRange(Word.RangeLocation.start);
+      const inserted = probe.insertText('\u200B', Word.InsertLocation.replace);
+      await ctx.sync();
+
+      const probeChanges = inserted.getTrackedChanges();
+      probeChanges.load('items');
+      await ctx.sync();
+
+      if (probeChanges.items.length === 0) {
+        throw new Error('Could not determine your reviewer name — make sure Track Changes is available in this document.');
+      }
+
+      const probeChange = probeChanges.items[0];
+      probeChange.load('author');
+      await ctx.sync();
+      const authorName = probeChange.author;
+
+      probeChange.reject();
+      await ctx.sync();
+
+      return authorName;
+    }
+
+    function showError(message) {
+      const url = location.href.replace(/commands\.html.*$/, 'dialog.html') + '?msg=' + encodeURIComponent(message);
+      Office.context.ui.displayDialogAsync(url, { height: 30, width: 40, displayInIframe: false });
     }
 
     // ── Per-paragraph scan ───────────────────────────────────────────────────
@@ -138,7 +83,6 @@
     async function minimizeParagraph(ctx, paragraph, authorName) {
       let cursor = paragraph.getRange(Word.RangeLocation.start);
       const paraEnd = paragraph.getRange(Word.RangeLocation.end);
-      let groupsRewritten = 0;
 
       while (true) {
         const scope = cursor.expandTo(paraEnd);
@@ -165,10 +109,7 @@
         await ctx.sync();
 
         cursor = await applyDiffInRange(ctx, groupRange, deletedText, insertedText);
-        groupsRewritten++;
       }
-
-      return groupsRewritten;
     }
 
     // Finds the first adjacent Deleted-run + Added-run (in either order) where

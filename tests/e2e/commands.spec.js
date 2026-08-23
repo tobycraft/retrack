@@ -1,16 +1,9 @@
 const { test, expect } = require('@playwright/test');
-const { loadTaskpane, serializeParagraphs } = require('./fixtures');
+const { loadCommandsPage, runMinimizeChanges, serializeParagraphs } = require('./fixtures');
 
-async function minimize(page, authorName) {
-  await page.fill('#authorName', authorName);
-  await page.click('#btn');
-  await expect(page.locator('#status')).not.toHaveText('Working…');
-  return serializeParagraphs(page);
-}
-
-test.describe('Minimize My Changes — tracked-changes scan/rewrite', () => {
+test.describe('Minimize My Changes — ribbon command (commands.html)', () => {
   test('minimizes a single delete+insert pair to a word-level diff', async ({ page }) => {
-    await loadTaskpane(page, {
+    await loadCommandsPage(page, {
       paragraphs: [
         [
           { text: 'The quick ' },
@@ -21,15 +14,16 @@ test.describe('Minimize My Changes — tracked-changes scan/rewrite', () => {
       ],
     });
 
-    const result = await minimize(page, 'Test Author');
+    await runMinimizeChanges(page);
 
-    await expect(page.locator('#status')).toHaveText('Minimized 1 change.');
+    const dialogUrl = await page.evaluate(() => window.__mock.lastDialogUrl);
+    expect(dialogUrl).toBeUndefined();
+
     // The diff engine's edit script deletes then inserts; the apply loop
     // positions each insertion at the start of the deletion it follows, so
     // the rewritten insertion lands immediately before the (still-present,
-    // struck-through) deleted text — matching how the pre-existing
-    // selection-based apply loop this logic was copied from already behaved.
-    expect(result).toEqual([
+    // struck-through) deleted text.
+    expect(await serializeParagraphs(page)).toEqual([
       [
         { text: 'The quick ', revision: null },
         { text: 'red ', revision: { type: 'Added', author: 'Test Author' } },
@@ -40,7 +34,7 @@ test.describe('Minimize My Changes — tracked-changes scan/rewrite', () => {
   });
 
   test('minimizes multiple pairs across paragraphs', async ({ page }) => {
-    await loadTaskpane(page, {
+    await loadCommandsPage(page, {
       paragraphs: [
         [
           { text: 'Alpha ' },
@@ -57,10 +51,9 @@ test.describe('Minimize My Changes — tracked-changes scan/rewrite', () => {
       ],
     });
 
-    const result = await minimize(page, 'Test Author');
+    await runMinimizeChanges(page);
 
-    await expect(page.locator('#status')).toHaveText('Minimized 2 changes.');
-    expect(result).toEqual([
+    expect(await serializeParagraphs(page)).toEqual([
       [
         { text: 'Alpha one ', revision: null },
         { text: 'three', revision: { type: 'Added', author: 'Test Author' } },
@@ -86,12 +79,11 @@ test.describe('Minimize My Changes — tracked-changes scan/rewrite', () => {
       ],
     ];
 
-    await loadTaskpane(page, { paragraphs: original });
+    await loadCommandsPage(page, { paragraphs: original, actingAuthor: 'Test Author' });
 
-    const result = await minimize(page, 'Test Author');
+    await runMinimizeChanges(page);
 
-    await expect(page.locator('#status')).toHaveText('No matching changes found to minimize.');
-    expect(result).toEqual(original.map(parts => parts.map(p => ({
+    expect(await serializeParagraphs(page)).toEqual(original.map(parts => parts.map(p => ({
       text: p.text,
       revision: p.del ? { type: 'Deleted', author: p.del.author }
         : p.ins ? { type: 'Added', author: p.ins.author }
@@ -107,16 +99,60 @@ test.describe('Minimize My Changes — tracked-changes scan/rewrite', () => {
       ],
     ];
 
-    await loadTaskpane(page, { paragraphs: original });
+    await loadCommandsPage(page, { paragraphs: original });
 
-    const result = await minimize(page, 'Test Author');
+    await runMinimizeChanges(page);
 
-    await expect(page.locator('#status')).toHaveText('No matching changes found to minimize.');
-    expect(result).toEqual([
+    expect(await serializeParagraphs(page)).toEqual([
       [
         { text: 'Hello ', revision: null },
         { text: 'world', revision: { type: 'Added', author: 'Test Author' } },
       ],
     ]);
+  });
+
+  test('auto-detects the reviewer name with no input, even with a pair at the very start of the document', async ({ page }) => {
+    // The author-detection probe inserts its throwaway character at the very
+    // start of the document — this document puts a real tracked-change pair
+    // in exactly that spot, to prove the probe doesn't corrupt it.
+    await loadCommandsPage(page, {
+      paragraphs: [
+        [
+          { text: 'old', del: { author: 'Detected Reviewer' } },
+          { text: 'new', ins: { author: 'Detected Reviewer' } },
+          { text: ' rest.' },
+        ],
+      ],
+      actingAuthor: 'Detected Reviewer',
+    });
+
+    await runMinimizeChanges(page);
+
+    const dialogUrl = await page.evaluate(() => window.__mock.lastDialogUrl);
+    expect(dialogUrl).toBeUndefined();
+
+    expect(await serializeParagraphs(page)).toEqual([
+      [
+        { text: 'new', revision: { type: 'Added', author: 'Detected Reviewer' } },
+        { text: 'old', revision: { type: 'Deleted', author: 'Detected Reviewer' } },
+        { text: ' rest.', revision: null },
+      ],
+    ]);
+  });
+
+  test('opens the error dialog and still signals completion when something fails', async ({ page }) => {
+    await loadCommandsPage(page, {
+      paragraphs: [[{ text: 'Hello world.' }]],
+    });
+
+    await page.evaluate(() => {
+      window.Word.run = () => Promise.reject(new Error('boom'));
+    });
+
+    await runMinimizeChanges(page); // resolves only once event.completed() is called
+
+    const dialogUrl = await page.evaluate(() => window.__mock.lastDialogUrl);
+    expect(dialogUrl).toContain('dialog.html');
+    expect(dialogUrl).toContain('msg=boom');
   });
 });

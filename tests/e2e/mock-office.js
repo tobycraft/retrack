@@ -1,12 +1,15 @@
 // Stand-in for Microsoft's office.js, served to the browser in place of the
 // real CDN script during tests. Real Word/Office.js can't be automated in
 // CI, so this mock reproduces just enough of the Word JS API surface
-// (Office.onReady, Word.run, Body.paragraphs, Paragraph/Range.getRange,
+// (Office.onReady, Office.actions.associate, Office.context.ui.displayDialogAsync,
+// Word.run, Body.getRange/paragraphs, Paragraph/Range.getRange,
 // Range.expandTo/insertText/delete/search/getTrackedChanges,
-// TrackedChange.reject) for taskpane.html's minimizeChanges() flow to run
+// TrackedChange.reject) for commands.html's minimizeChanges() flow to run
 // end to end against the real diff/scan logic, driven from
 // window.__mock.doc (built by tests/e2e/fixtures.js before this script
-// runs).
+// runs). Since commands.html has no visible UI, tests drive it by calling
+// the function Office.actions.associate registered, not by clicking
+// anything — see window.__mock.registeredActions below.
 //
 // Document model: each paragraph is { chars: [{ch, revision}], liveRanges }.
 // `revision` is null for plain text, or { type: 'Deleted'|'Added', author }
@@ -127,12 +130,14 @@
     };
   }
 
+  function paragraphBoundaryRange(paragraph, location) {
+    const pos = location === 'End' ? paragraph.chars.length : 0;
+    return makeRange(paragraph, registerRange(paragraph, pos, pos));
+  }
+
   function makeParagraph(paragraph) {
     return {
-      getRange: function (location) {
-        const pos = location === 'End' ? paragraph.chars.length : 0;
-        return makeRange(paragraph, registerRange(paragraph, pos, pos));
-      },
+      getRange: function (location) { return paragraphBoundaryRange(paragraph, location); },
     };
   }
 
@@ -146,6 +151,13 @@
         document: {
           changeTrackingMode: null,
           body: {
+            // The document-start probe (detectAuthorName) operates on the
+            // body directly, not a paragraph, so it needs its own getRange —
+            // 'Start' resolves to the very start of the first paragraph.
+            getRange: function (location) {
+              const paragraph = location === 'End' ? doc.paragraphs[doc.paragraphs.length - 1] : doc.paragraphs[0];
+              return paragraphBoundaryRange(paragraph, location);
+            },
             paragraphs: {
               load: function () {},
               items: doc.paragraphs.map(makeParagraph),
@@ -163,6 +175,20 @@
       const result = { host: 'Word', platform: 'PC' };
       if (cb) cb(result);
       return Promise.resolve(result);
+    },
+    actions: {
+      associate: function (name, fn) {
+        window.__mock.registeredActions = window.__mock.registeredActions || {};
+        window.__mock.registeredActions[name] = fn;
+      },
+    },
+    context: {
+      ui: {
+        displayDialogAsync: function (url, options, callback) {
+          window.__mock.lastDialogUrl = url;
+          if (callback) callback({ status: 'succeeded' });
+        },
+      },
     },
   };
 })();

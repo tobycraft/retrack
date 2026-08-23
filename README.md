@@ -18,19 +18,20 @@ git push
 
 **3. Enable GitHub Pages:** Settings → Pages → Source: `main` branch, `/docs` folder.
 
-**4. Sideload the add-in in Word:** Insert → Get Add-ins → Upload My Add-in → select `manifest.xml`.
+**4. Sideload the add-in in Word:** Insert → Get Add-ins → Upload My Add-in → select `manifest.xml`. A **Minimize My Changes** button appears on the Home ribbon tab — there's no task pane to open.
 
 ## Usage
 
 1. Edit the document normally in Word with Track Changes on — Word will often record a whole retyped sentence as one big delete+insert.
-2. Enter your name in the task pane exactly as it appears in Word's tracked changes (File → Options → General → User name).
-3. Click **Minimize My Changes**.
+2. Click **Minimize My Changes** on the ribbon.
 
-Only the words that actually changed stay marked as tracked insertions/deletions; everything else reverts to plain, unmarked text. No clipboard involved — the add-in reads the "before" and "after" text straight from the tracked changes already in the document.
+That's it — no selection to make, no text to paste, no name to type. Only the words that actually changed stay marked as tracked insertions/deletions; everything else reverts to plain, unmarked text. Nothing appears on success (the tracked changes update in place); if something goes wrong, a small popup explains what.
 
 ## How it works
 
-Scans the document paragraph by paragraph for adjacent delete+insert tracked-change pairs authored by the name you entered (via Office.js's `getTrackedChanges()`). For each pair, it rejects both revisions (restoring plain original text), tokenizes the original and replacement text into word/whitespace tokens, runs a Myers diff to find the minimal edit script, and replays it as native `insertText()`/`delete()` calls with Track Changes on — so Word itself records the new word-level `<w:ins>`/`<w:del>` marks.
+Before scanning anything, the add-in figures out "your name" the way Word itself would stamp it: it makes one throwaway tracked edit (an invisible character at the very start of the document), reads the `author` Word just stamped on it, and rejects that edit away. Office.js has no API to read the current Word user's name directly outside Outlook, so this is the workaround — no popup, no typing, nothing to go stale.
+
+It then scans the document paragraph by paragraph for adjacent delete+insert tracked-change pairs authored by that name (via Office.js's `getTrackedChanges()`). For each pair, it rejects both revisions (restoring plain original text), tokenizes the original and replacement text into word/whitespace tokens, runs a Myers diff to find the minimal edit script, and replays it as native `insertText()`/`delete()` calls with Track Changes on — so Word itself records the new word-level `<w:ins>`/`<w:del>` marks.
 
 See [CLAUDE.md](CLAUDE.md) for full architecture and design notes.
 
@@ -53,7 +54,8 @@ fields, HTTPS URLs) against `manifest.xml`.
 **2. Confirm the hosted site is live** (Settings → Pages must be enabled,
 `main` branch, `/docs` folder — see Setup above). Check that these all load
 over HTTPS with no errors:
-- `https://<username>.github.io/track-minimal-changes/taskpane.html`
+- `https://<username>.github.io/track-minimal-changes/commands.html`
+- `https://<username>.github.io/track-minimal-changes/dialog.html`
 - `https://<username>.github.io/track-minimal-changes/assets/icon-{16,32,80}.png`
 - `https://<username>.github.io/track-minimal-changes/privacy.html`
 
@@ -81,11 +83,11 @@ surprised if the first submission comes back with feedback — that's normal.
 
 The add-in itself has zero build/npm dependencies. `package.json` and `tests/` are dev-only tooling for an end-to-end test suite — nothing under them is deployed to GitHub Pages.
 
-Real Word can't be automated in CI, so the tests load the actual `docs/taskpane.html` in a real browser via [Playwright](https://playwright.dev), and swap the Office.js CDN script for a small mock of the Word JS API (`tests/e2e/mock-office.js`) that simulates a document's paragraphs and tracked changes. The tokenizer, diff engine, and scan/rewrite loop run unmodified — only the Word/Office host boundary is faked.
+Real Word can't be automated in CI, so the tests load the actual `docs/commands.html` in a real browser via [Playwright](https://playwright.dev), and swap the Office.js CDN script for a small mock of the Word JS API (`tests/e2e/mock-office.js`) that simulates a document's paragraphs and tracked changes, plus `Office.actions.associate` and `Office.context.ui.displayDialogAsync`. Since there's no visible UI to click, the tests invoke the registered `minimizeChanges` action directly with a synthetic event object — the tokenizer, diff engine, auto-detected-author probe, and scan/rewrite loop all run unmodified, only the Word/Office host boundary is faked.
 
 ```bash
 npm install
 npm run test:e2e
 ```
 
-Covers the core scenarios: a single delete+insert pair minimized to a word-level diff, multiple pairs across paragraphs, a pair skipped because it's authored by someone else, and a document with no matching tracked changes at all.
+Covers the core scenarios: a single delete+insert pair minimized to a word-level diff, multiple pairs across paragraphs, a pair skipped because it's authored by someone else, a document with no matching tracked changes at all, the author name being correctly auto-detected rather than typed, and an error opening the `dialog.html` popup instead of throwing silently.

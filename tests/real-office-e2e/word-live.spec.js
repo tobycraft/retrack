@@ -21,15 +21,18 @@
 //
 // When that infra exists, implement this by:
 //   1. `npm install --save-dev @microsoft/office-addin-test-framework`
-//   2. Sideload manifest.xml into the test Word instance / tenant
-//   3. Open the fixture doc, type the fixture's reviewer name into the
-//      task pane, click Minimize My Changes
+//   2. Sideload manifest.xml into the test Word instance / tenant, with the
+//      fixture doc's Word user name already set to the fixture's reviewer
+//      name (File > Options > General > User name) — there's no field to
+//      type it into anymore
+//   3. Open the fixture doc, click Minimize My Changes on the ribbon
 //   4. Re-open/read the saved document.xml and assert the real <w:ins>/
 //      <w:del> runs match the same core scenarios covered in
-//      tests/e2e/taskpane.spec.js (single pair minimized, multiple pairs
+//      tests/e2e/commands.spec.js (single pair minimized, multiple pairs
 //      across paragraphs, a pair skipped for another author, no matching
-//      pairs) — this time verifying Word actually applied them, not just
-//      that the add-in's mocked model was updated correctly.
+//      pairs, author auto-detection) — this time verifying Word actually
+//      applied them, not just that the add-in's mocked model was updated
+//      correctly.
 //
 // See the "Testing" section in README.md and CLAUDE.md for the current
 // mocked-host approach and why it was chosen over this one for now.

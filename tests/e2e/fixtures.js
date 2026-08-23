@@ -19,10 +19,13 @@ function buildParagraphs(spec) {
   });
 }
 
-// Loads the real taskpane.html in the browser, with the Office.js CDN
+// Loads the real docs/commands.html in the browser, with the Office.js CDN
 // script swapped for our mock. Everything else — tokenizer, Myers diff,
-// paragraph scan/rewrite loop, DOM wiring — runs unmodified.
-async function loadTaskpane(page, { paragraphs, actingAuthor = 'Test Author' }) {
+// author-detection probe, paragraph scan/rewrite loop — runs unmodified.
+// actingAuthor is "the current Word user" as far as the mock is concerned:
+// it's stamped on every new tracked edit the mock makes (including the
+// commands.html author-detection probe), exactly like a real Word user name.
+async function loadCommandsPage(page, { paragraphs, actingAuthor = 'Test Author' }) {
   const doc = { paragraphs: buildParagraphs(paragraphs) };
 
   await page.addInitScript(
@@ -36,8 +39,17 @@ async function loadTaskpane(page, { paragraphs, actingAuthor = 'Test Author' }) 
     route.fulfill({ status: 200, contentType: 'application/javascript', body: mockOfficeJs })
   );
 
-  await page.goto('/taskpane.html');
-  await page.waitForFunction(() => window.Office !== undefined);
+  await page.goto('/commands.html');
+  await page.waitForFunction(() => !!(window.__mock.registeredActions && window.__mock.registeredActions.minimizeChanges));
+}
+
+// Invokes the ribbon action exactly as Word would on a button click, and
+// waits for event.completed() — the signal commands.html always sends,
+// success or failure, once it's done.
+function runMinimizeChanges(page) {
+  return page.evaluate(() => new Promise(resolve => {
+    window.__mock.registeredActions.minimizeChanges({ completed: resolve });
+  }));
 }
 
 // Reads back the current document state as runs of contiguous same-markup
@@ -61,4 +73,4 @@ function serializeParagraphs(page) {
   });
 }
 
-module.exports = { loadTaskpane, serializeParagraphs };
+module.exports = { loadCommandsPage, runMinimizeChanges, serializeParagraphs };
