@@ -102,7 +102,13 @@
         const groupRange = allRevs[0].ref.getRange(Word.RangeLocation.start)
           .expandTo(allRevs[allRevs.length - 1].ref.getRange(Word.RangeLocation.end));
 
-        const deletedText = group.deletedRun.map(r => r.text).join('');
+        // TrackedChange.text reflects the text as it would read if the change
+        // were accepted — correct for an Added revision (accepting keeps the
+        // text) but always empty for a Deleted revision (accepting removes
+        // it), even though the struck-through text is still visually present.
+        // So the inserted text can be read directly, but the deleted text has
+        // to be recovered from groupRange itself, after rejecting restores it
+        // to plain text (see below).
         const insertedText = group.addedRun.map(r => r.text).join('');
 
         // Reject by re-querying groupRange's tracked changes fresh before
@@ -119,6 +125,13 @@
           remaining.items[0].reject();
           await ctx.sync();
         }
+
+        // Rejecting the Added revision removed insertedText from the range,
+        // and rejecting the Deleted revision restored its text as plain text
+        // — so groupRange now holds exactly the original "before" text.
+        groupRange.load('text');
+        await ctx.sync();
+        const deletedText = groupRange.text;
 
         cursor = await applyDiffInRange(ctx, groupRange, deletedText, insertedText);
       }

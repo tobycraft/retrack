@@ -3,7 +3,7 @@
 // CI, so this mock reproduces just enough of the Word JS API surface
 // (Office.onReady, Office.actions.associate, Office.context.ui.displayDialogAsync,
 // Word.run, Body.getRange/paragraphs, Paragraph/Range.getRange,
-// Range.expandTo/insertText/delete/search/getTrackedChanges,
+// Range.expandTo/insertText/delete/search/getTrackedChanges/text,
 // TrackedChange.reject) for commands.html's minimizeChanges() flow to run
 // end to end against the real diff/scan logic, driven from
 // window.__mock.doc (built by tests/e2e/fixtures.js before this script
@@ -86,6 +86,7 @@
   function makeRange(paragraph, live) {
     return {
       load: function () {},
+      get text() { return paragraph.chars.slice(live.start, live.end).map(c => c.ch).join(''); },
       getRange: function (location) {
         const pos = location === 'End' ? live.end : live.start;
         return makeRange(paragraph, registerRange(paragraph, pos, pos));
